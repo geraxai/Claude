@@ -1,0 +1,13 @@
+{
+  "name": "estrattore-isps-pmis",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App web per estrarre dal modulo ISPS gli ultimi dieci approdi e generare il .txt per il PMIS",
+  "scripts": {
+    "test": "node test/test_estrattore.mjs",
+    "test:ocr": "node test/test_ocr.mjs",
+    "dati": "python3 strumenti/genera_dati_porti.py",
+    "pdf-prova": "python3 test/genera_pdf_prova.py",
+    "versione-unica": "python3 strumenti/crea_file_unico.py"
+  }
+}
