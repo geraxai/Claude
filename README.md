@@ -96,12 +96,15 @@ comuni, elencando sempre quello che ha cambiato.
 | anno sbagliato (`2025` in mezzo a righe del 2026) | ricalcola l'anno in base all'ordine cronologico delle altre righe |
 | anno incompleto o a due cifre (`26`, `202`) | lo completa |
 | data in formato americano (`07/30/2026`) | inverte giorno e mese |
+| mese scritto a parole (`28 AUG 2026`, `28/ago/2026`) | lo riporta in cifre |
 | giorno inesistente (`31/04`) | lo riporta all'ultimo giorno del mese |
 | arrivo e partenza invertiti | scambia le due date |
 | righe in ordine dal più vecchio al più recente | se ne accorge e mantiene la coerenza |
 | livello di sicurezza vuoto o illeggibile (`l`, `7`) | lo porta a 1, 2 o 3 e lo segnala |
 | port facility con spazi o sporcizia dell'OCR (`EGPSD 0007`) | la riscrive come `EGPSD-0007` |
 | codice della port facility di un altro porto | lo allinea all'UN/LOCODE della riga |
+| tabella che continua sulla pagina seguente | la legge per intero |
+| scansione entrata nello scanner coricata | riprova a leggerla girando la pagina |
 
 Le date, il formato della port facility e l'ordine delle righe si possono cambiare nel
 riquadro **Opzioni**.
@@ -137,7 +140,7 @@ Serve solo a chi mette mano al progetto (Python 3 e Node.js):
 python3 strumenti/genera_dati_porti.py   # riscarica l'elenco UN/LOCODE aggiornato
 python3 strumenti/crea_file_unico.py     # ricrea la versione a file unico
 python3 test/genera_pdf_prova.py         # ricrea i PDF di prova (reportlab, pillow, pypdfium2)
-node test/test_estrattore.mjs            # 91 verifiche automatiche
+node test/test_estrattore.mjs            # 109 verifiche automatiche
 npm install --no-save tesseract.js@5.1.1 && node test/test_ocr.mjs   # prova OCR
 ```
 
