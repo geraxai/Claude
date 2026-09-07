@@ -2511,7 +2511,15 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
     }
   ];
 
+  /* Aperta con doppio clic (file://) la pagina non puo' leggere i file
+     accanto a se': in quel caso l'unica strada per l'OCR e' la copia pubblica. */
+  var FONTI_OCR_UTILI = window.location.protocol === 'file:'
+    ? FONTI_OCR.slice(1)
+    : FONTI_OCR;
+
   var DPI_OCR = 200;
+  var SCADENZA_AVVIO_OCR = 90000;
+  var SCADENZA_PAGINA_OCR = 300000;
   var LATO_MASSIMO_OCR = 2600; // limite prudente per la memoria dell'iPhone
 
   var elementi = {};
@@ -2595,24 +2603,45 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
     });
   }
 
+  /* Una promessa che non arriva mai bloccherebbe l'app: le mettiamo un tempo
+     massimo, cosi' l'utente vede un messaggio invece di una barra ferma. */
+  function conScadenza(promessa, millisecondi, messaggio) {
+    return new Promise(function (risolvi, rifiuta) {
+      var scaduta = false;
+      var orologio = window.setTimeout(function () {
+        scaduta = true;
+        rifiuta(new Error(messaggio));
+      }, millisecondi);
+      promessa.then(function (valore) {
+        if (scaduta) { return; }
+        window.clearTimeout(orologio);
+        risolvi(valore);
+      }, function (errore) {
+        if (scaduta) { return; }
+        window.clearTimeout(orologio);
+        rifiuta(errore);
+      });
+    });
+  }
+
   /* Prepara il motore OCR provando le fonti in ordine. */
   function creaLavoratoreOcr(indiceFonte) {
     var indice = indiceFonte || 0;
-    if (indice >= FONTI_OCR.length) {
+    if (indice >= FONTI_OCR_UTILI.length) {
       return Promise.reject(new Error(
         'Il PDF è una scansione e per leggerla serve il riconoscimento del testo, ' +
-        'che non riesco a caricare. Collegati a internet e riprova, oppure inserisci ' +
-        'le righe a mano.'
+        'che qui non riesco ad avviare. Apri l\'app dal suo indirizzo internet ' +
+        '(la versione a cartella), oppure inserisci le righe a mano qui sotto.'
       ));
     }
-    var fonte = FONTI_OCR[indice];
+    var fonte = FONTI_OCR_UTILI[indice];
     var nucleo = fonte.nucleo + (supportaSimd() ? 'tesseract-core-simd.wasm.js' : 'tesseract-core.wasm.js');
     var preparazione = self.Tesseract
       ? Promise.resolve()
       : caricaScript(fonte.script);
 
     return preparazione.then(function () {
-      return self.Tesseract.createWorker('eng', 1, {
+      return conScadenza(self.Tesseract.createWorker('eng', 1, {
         workerPath: fonte.lavoratore,
         corePath: nucleo,
         langPath: fonte.lingua,
@@ -2622,7 +2651,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
             stampaStato('Riconoscimento del testo in corso\u2026', 40 + messaggio.progress * 50);
           }
         }
-      });
+      }), SCADENZA_AVVIO_OCR, 'avvio del riconoscimento del testo troppo lento (' + fonte.nome + ')');
     }).then(function (lavoratore) {
       // senza segmentazione automatica Tesseract perde il contenuto delle
       // celle delle tabelle
@@ -2681,7 +2710,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
         stampaStato('Riconoscimento del testo: pagina ' + numero + ' di ' + documento.numPages +
           ' (può richiedere qualche minuto)\u2026', 36);
         return documento.getPage(numero).then(disegnaPagina).then(function (tela) {
-          return lavoratore.recognize(tela, {}, { blocks: true }).then(function (esito) {
+          var riconoscimento = conScadenza(
+            lavoratore.recognize(tela, {}, { blocks: true }),
+            SCADENZA_PAGINA_OCR,
+            'il riconoscimento del testo di questa pagina non è riuscito entro il tempo previsto'
+          );
+          return riconoscimento.then(function (esito) {
             pagine.push(self.EstrattoreIsps.paroleDaOcr(paroleDaRiconoscimento(esito.data)));
             var provvisorio = self.EstrattoreIsps.estraiDaParole(pagine);
             if (provvisorio.righe.length) { return pagine; }
