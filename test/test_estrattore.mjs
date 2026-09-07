@@ -74,6 +74,7 @@ async function testModuloPulito() {
   const { estratto, esito } = await elabora('modulo_pulito.pdf');
   confronta('dieci approdi estratti', esito.righe.length, 10);
   confronta('pagina della tabella', estratto.pagina, 1);
+  verifica('intestazione della tabella riconosciuta', estratto.diagnostica.intestazioneTrovata === true);
   confronta('data del modulo (ETA) riconosciuta', Correzioni.formattaData(esito.dataModulo), '03/09/2026');
   const righe = Correzioni.formattaTesto(esito.righe).trim().split('\n');
   for (let i = 0; i < ATTESO_PULITO.length; i++) {
@@ -205,6 +206,21 @@ function testLetturaRiga() {
   confronta('codice spezzato in due parole', codiceSpezzato.unlocode, 'ROCND');
 }
 
+/* L'app decide se vale la pena rileggere una scansione girata guardando se ha
+   almeno riconosciuto l'intestazione della tabella. */
+function testDiagnostica() {
+  console.log('\nDiagnostica dell\'estrazione');
+  function parole(testo, y) {
+    return testo.split(' ').map((t, i) => ({
+      testo: t, x0: i * 12, x1: i * 12 + 10, y: y, altezza: 8
+    }));
+  }
+  const illeggibile = Estrattore.estraiDaParole([parole('yzq wm rrn xdh lkk', 100)]);
+  verifica('pagina illeggibile: intestazione non trovata',
+    illeggibile.diagnostica.intestazioneTrovata === false);
+  confronta('pagina illeggibile: nessuna riga', illeggibile.righe.length, 0);
+}
+
 function testDate() {
   console.log('\nCorrezione delle date');
   const soloUnaRiga = (arrivo, partenza) => Correzioni.armonizzaDate(
@@ -263,6 +279,7 @@ function testLivelliEFacility() {
   console.log('Test estrattore ISPS -> PMIS');
   testDatabase();
   testLetturaRiga();
+  testDiagnostica();
   testDate();
   testLivelliEFacility();
   await testModuloPulito();

@@ -256,13 +256,17 @@
         return prossima(1);
       }
 
-      /* Il primo tentativo (pagina diritta) e' anche quello che teniamo se
-         nessun orientamento produce la tabella: i messaggi che l'utente legge
-         restano quelli della scansione come gli e' arrivata. */
+      /* Girare la pagina ha senso solo se non e' stata riconosciuta nemmeno
+         l'intestazione della tabella: se quella c'e', la scansione era diritta
+         e il problema sta altrove, quindi non facciamo aspettare altri tre
+         giri di OCR per niente. Teniamo comunque il primo tentativo, cosi' i
+         messaggi restano quelli della scansione come e' arrivata. */
       function tentaOrientamenti(indice, ripiego) {
         if (indice >= GIRI_OCR.length) { return Promise.resolve(ripiego); }
         return scansiona(GIRI_OCR[indice]).then(function (pagine) {
-          if (self.EstrattoreIsps.estraiDaParole(pagine).righe.length) { return pagine; }
+          var esito = self.EstrattoreIsps.estraiDaParole(pagine);
+          if (esito.righe.length) { return pagine; }
+          if (esito.diagnostica.intestazioneTrovata) { return ripiego.length ? ripiego : pagine; }
           return tentaOrientamenti(indice + 1, ripiego.length ? ripiego : pagine);
         });
       }

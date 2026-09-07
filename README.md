@@ -140,7 +140,7 @@ Serve solo a chi mette mano al progetto (Python 3 e Node.js):
 python3 strumenti/genera_dati_porti.py   # riscarica l'elenco UN/LOCODE aggiornato
 python3 strumenti/crea_file_unico.py     # ricrea la versione a file unico
 python3 test/genera_pdf_prova.py         # ricrea i PDF di prova (reportlab, pillow, pypdfium2)
-node test/test_estrattore.mjs            # 109 verifiche automatiche
+node test/test_estrattore.mjs            # 112 verifiche automatiche
 npm install --no-save tesseract.js@5.1.1 && node test/test_ocr.mjs   # prova OCR
 ```
 

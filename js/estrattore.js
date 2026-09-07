@@ -634,7 +634,14 @@
    * Restituisce { righe, riferimento, pagina, diagnostica }.
    */
   function estraiDaParole(paginaParole) {
-    var diagnostica = { pagine: paginaParole.length, righeTesto: 0, tabellaTrovata: false };
+    var diagnostica = {
+      pagine: paginaParole.length,
+      righeTesto: 0,
+      // l'intestazione della tabella e' stata riconosciuta: distingue "pagina
+      // illeggibile" da "tabella trovata ma righe non interpretabili"
+      intestazioneTrovata: false,
+      tabellaTrovata: false
+    };
     var riferimentoGlobale = null;
     var righePerPagina = [];
 
@@ -651,6 +658,7 @@
     for (var pagina = 0; pagina < righePerPagina.length; pagina++) {
       var inizio = indiceInizioTabella(righePerPagina[pagina]);
       if (inizio < 0) { continue; }
+      diagnostica.intestazioneTrovata = true;
       // la tabella puo' proseguire sulle pagine successive: le uniamo, tanto
       // la lettura si ferma da sola alla domanda che segue la tabella
       var complessive = righePerPagina[pagina];
