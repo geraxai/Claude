@@ -1049,9 +1049,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
   ];
   var FRASE_ETA = ['EXPECTEDDATEANDTIMEOFARRIVAL', 'DATEANDTIMEOFARRIVAL'];
 
-  /* Una data: 1 o 2 cifre, separatore, 1 o 2 cifre, separatore, 2-4 cifre.
-     Le lettere confuse dall'OCR con le cifre vengono normalizzate prima. */
-  var REGEX_DATA = /(\d{1,4})\s*[\/\.\-]\s*(\d{1,2})\s*[\/\.\-]\s*(\d{2,4})/g;
   var REGEX_LOCODE = /^[A-Z]{2}[A-Z0-9]{3}$/;
   var REGEX_SOLO_NUMERO_RIGA = /^\(?(10|[1-9])[\.\)]?$/;
 
@@ -1246,50 +1243,81 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
     return risultato;
   }
 
-  /* Rende "numerico" un pezzo di testo che dovrebbe contenere una data:
-     "0l/l2/2O24" -> "01/12/2024". Sostituisce anche gli spazi usati come
-     separatore ("12 05 2024") e i separatori raddoppiati. */
+  /* Uniforma i separatori: "12 / 05 / 2024" -> "12/05/2024". */
   function normalizzaPezzoData(testo) {
-    var t = cifreDaTesto(testo);
-    t = t.replace(/[\u2010-\u2015]/g, '-');
-    t = t.replace(/\s*([\/\.\-])\s*/g, '$1');
-    t = t.replace(/(\d)\s+(\d)/g, '$1 $2');
-    return t;
+    return String(testo || '')
+      .replace(/[\u2010-\u2015]/g, '-')
+      .replace(/\s*([\/\.\-])\s*/g, '$1');
   }
 
+  /* Dentro una data accettiamo le cifre e tutte le lettere che l'OCR ci
+     scambia per cifre, cosi' "0l/l2/2O24" resta riconoscibile. */
+  var CIFRE_O_LETTERE = '0-9' + Object.keys(CIFRE_CONFUSE).map(function (carattere) {
+    return /[A-Za-z0-9]/.test(carattere) ? carattere : '\\' + carattere;
+  }).join('');
+  var REGEX_DATA_TOLLERANTE = new RegExp(
+    '([' + CIFRE_O_LETTERE + ']{1,4})[\\/.\\-]([' + CIFRE_O_LETTERE + ']{1,2})[\\/.\\-]([' +
+    CIFRE_O_LETTERE + ']{2,4})', 'g'
+  );
+
+  var MESI = {
+    GEN: 1, JAN: 1, FEB: 2, MAR: 3, APR: 4, MAG: 5, MAY: 5, GIU: 6, JUN: 6,
+    LUG: 7, JUL: 7, AGO: 8, AUG: 8, SET: 9, SEP: 9, OTT: 10, OCT: 10,
+    NOV: 11, DIC: 12, DEC: 12
+  };
+  var REGEX_DATA_CON_MESE = /(\d{1,2})\s*[\/.\- ]\s*([A-Za-z]{3,10})\.?\s*[\/.\- ]\s*(\d{2,4})/g;
+
+  /*
+   * Cerca le date dentro un testo. Riconosce "28/08/2026", "28.8.26",
+   * "28 AUG 2026", "28/ago/2026", "28 08 2026" e "28082026", e sopporta le
+   * lettere che l'OCR mette al posto delle cifre ("0l/l2/2O24").
+   */
   function trovaDate(testo) {
-    var normalizzato = normalizzaPezzoData(testo);
-    // accetta anche "12 05 2024" e "12052024"
+    var pulito = normalizzaPezzoData(testo);
     var candidati = [];
-    var regex = new RegExp(REGEX_DATA.source, 'g');
     var trovato;
-    while ((trovato = regex.exec(normalizzato)) !== null) {
+
+    function aggiungi(intero, indice, giorno, mese, anno) {
       candidati.push({
-        testo: trovato[0],
-        indice: trovato.index,
-        parti: [trovato[1], trovato[2], trovato[3]]
+        testo: intero,
+        indice: indice,
+        parti: [giorno, mese, anno]
       });
     }
+
+    var conMese = new RegExp(REGEX_DATA_CON_MESE.source, 'g');
+    while ((trovato = conMese.exec(pulito)) !== null) {
+      var numeroMese = MESI[trovato[2].slice(0, 3).toUpperCase()];
+      if (numeroMese) {
+        aggiungi(trovato[0], trovato.index, trovato[1], String(numeroMese), trovato[3]);
+      }
+    }
+
+    if (!candidati.length) {
+      var tollerante = new RegExp(REGEX_DATA_TOLLERANTE.source, 'g');
+      while ((trovato = tollerante.exec(pulito)) !== null) {
+        aggiungi(
+          trovato[0], trovato.index,
+          cifreDaTesto(trovato[1]), cifreDaTesto(trovato[2]), cifreDaTesto(trovato[3])
+        );
+      }
+    }
+
+    // senza separatori accettiamo solo cifre vere, per non trasformare per
+    // sbaglio il nome di un porto in una data
     if (!candidati.length) {
       var conSpazi = /(\d{1,2})\s(\d{1,2})\s(\d{2,4})/g;
-      while ((trovato = conSpazi.exec(normalizzato)) !== null) {
-        candidati.push({
-          testo: trovato[0],
-          indice: trovato.index,
-          parti: [trovato[1], trovato[2], trovato[3]]
-        });
+      while ((trovato = conSpazi.exec(pulito)) !== null) {
+        aggiungi(trovato[0], trovato.index, trovato[1], trovato[2], trovato[3]);
       }
     }
     if (!candidati.length) {
       var attaccate = /\b(\d{2})(\d{2})(\d{4})\b/g;
-      while ((trovato = attaccate.exec(normalizzato)) !== null) {
-        candidati.push({
-          testo: trovato[0],
-          indice: trovato.index,
-          parti: [trovato[1], trovato[2], trovato[3]]
-        });
+      while ((trovato = attaccate.exec(pulito)) !== null) {
+        aggiungi(trovato[0], trovato.index, trovato[1], trovato[2], trovato[3]);
       }
     }
+
     return candidati;
   }
 
@@ -1629,42 +1657,37 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
   function estraiDaParole(paginaParole) {
     var diagnostica = { pagine: paginaParole.length, righeTesto: 0, tabellaTrovata: false };
     var riferimentoGlobale = null;
+    var righePerPagina = [];
 
     for (var p = 0; p < paginaParole.length; p++) {
       var righe = raggruppaInRighe(paginaParole[p]);
+      righePerPagina.push(righe);
       diagnostica.righeTesto += righe.length;
       if (!riferimentoGlobale) {
         var riferimento = trovaDataRiferimento(righe);
         if (riferimento) { riferimentoGlobale = riferimento; }
       }
-      var inizio = indiceInizioTabella(righe);
+    }
+
+    for (var pagina = 0; pagina < righePerPagina.length; pagina++) {
+      var inizio = indiceInizioTabella(righePerPagina[pagina]);
       if (inizio < 0) { continue; }
-      var fine = indiceFineTabella(righe, inizio);
-      var lette = leggiRigheTabella(righe, inizio, fine);
+      // la tabella puo' proseguire sulle pagine successive: le uniamo, tanto
+      // la lettura si ferma da sola alla domanda che segue la tabella
+      var complessive = righePerPagina[pagina];
+      for (var successiva = pagina + 1; successiva < righePerPagina.length; successiva++) {
+        complessive = complessive.concat(righePerPagina[successiva]);
+      }
+      var fine = indiceFineTabella(complessive, inizio);
+      var lette = leggiRigheTabella(complessive, inizio, fine);
       if (lette.length) {
         diagnostica.tabellaTrovata = true;
         return {
           righe: lette,
           riferimento: riferimentoGlobale,
-          pagina: p + 1,
+          pagina: pagina + 1,
           diagnostica: diagnostica
         };
-      }
-      // la tabella comincia in fondo alla pagina e continua sulla successiva
-      if (p + 1 < paginaParole.length) {
-        var righeSuccessive = raggruppaInRighe(paginaParole[p + 1]);
-        var unite = righe.slice(inizio).concat(righeSuccessive);
-        var fineUnite = indiceFineTabella(unite, 0);
-        var letteUnite = leggiRigheTabella(unite, 0, fineUnite);
-        if (letteUnite.length) {
-          diagnostica.tabellaTrovata = true;
-          return {
-            righe: letteUnite,
-            riferimento: riferimentoGlobale,
-            pagina: p + 1,
-            diagnostica: diagnostica
-          };
-        }
       }
     }
 
@@ -2521,6 +2544,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
   var SCADENZA_AVVIO_OCR = 90000;
   var SCADENZA_PAGINA_OCR = 300000;
   var LATO_MASSIMO_OCR = 2600; // limite prudente per la memoria dell'iPhone
+  var GIRI_OCR = [0, 90, 270, 180]; // orientamenti provati sulle scansioni coricate
 
   var elementi = {};
   var stato = {
@@ -2664,13 +2688,14 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
     });
   }
 
-  function disegnaPagina(pagina) {
+  function disegnaPagina(pagina, gradi) {
     var scala = DPI_OCR / 72;
-    var vista = pagina.getViewport({ scale: scala });
+    var rotazione = ((pagina.rotate || 0) + (gradi || 0)) % 360;
+    var vista = pagina.getViewport({ scale: scala, rotation: rotazione });
     var lato = Math.max(vista.width, vista.height);
     if (lato > LATO_MASSIMO_OCR) {
       scala = scala * (LATO_MASSIMO_OCR / lato);
-      vista = pagina.getViewport({ scale: scala });
+      vista = pagina.getViewport({ scale: scala, rotation: rotazione });
     }
     var tela = document.createElement('canvas');
     tela.width = Math.floor(vista.width);
@@ -2700,30 +2725,50 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
     return parole;
   }
 
-  /* Riconosce le pagine una alla volta e si ferma appena trova la tabella. */
+  /* Riconosce le pagine una alla volta e si ferma appena trova la tabella. Se
+     con la pagina diritta non trova nulla riprova girandola: alcune scansioni
+     arrivano coricate. */
   function leggiConOcr(documento) {
     stampaStato('Il PDF è una scansione: preparazione del riconoscimento del testo\u2026', 34);
     return creaLavoratoreOcr().then(function (lavoratore) {
-      var pagine = [];
-      function prossima(numero) {
-        if (numero > documento.numPages) { return Promise.resolve(pagine); }
-        stampaStato('Riconoscimento del testo: pagina ' + numero + ' di ' + documento.numPages +
-          ' (può richiedere qualche minuto)\u2026', 36);
-        return documento.getPage(numero).then(disegnaPagina).then(function (tela) {
-          var riconoscimento = conScadenza(
-            lavoratore.recognize(tela, {}, { blocks: true }),
-            SCADENZA_PAGINA_OCR,
-            'il riconoscimento del testo di questa pagina non è riuscito entro il tempo previsto'
-          );
-          return riconoscimento.then(function (esito) {
-            pagine.push(self.EstrattoreIsps.paroleDaOcr(paroleDaRiconoscimento(esito.data)));
-            var provvisorio = self.EstrattoreIsps.estraiDaParole(pagine);
-            if (provvisorio.righe.length) { return pagine; }
-            return prossima(numero + 1);
+
+      function scansiona(gradi) {
+        var pagine = [];
+        var giro = gradi ? ', pagina girata di ' + gradi + '\u00b0' : '';
+        function prossima(numero) {
+          if (numero > documento.numPages) { return Promise.resolve(pagine); }
+          stampaStato('Riconoscimento del testo: pagina ' + numero + ' di ' + documento.numPages +
+            giro + ' (può richiedere qualche minuto)\u2026', 36);
+          return documento.getPage(numero).then(function (pagina) {
+            return disegnaPagina(pagina, gradi);
+          }).then(function (tela) {
+            var riconoscimento = conScadenza(
+              lavoratore.recognize(tela, {}, { blocks: true }),
+              SCADENZA_PAGINA_OCR,
+              'il riconoscimento del testo di questa pagina non è riuscito entro il tempo previsto'
+            );
+            return riconoscimento.then(function (esito) {
+              pagine.push(self.EstrattoreIsps.paroleDaOcr(paroleDaRiconoscimento(esito.data)));
+              if (self.EstrattoreIsps.estraiDaParole(pagine).righe.length) { return pagine; }
+              return prossima(numero + 1);
+            });
           });
+        }
+        return prossima(1);
+      }
+
+      /* Il primo tentativo (pagina diritta) e' anche quello che teniamo se
+         nessun orientamento produce la tabella: i messaggi che l'utente legge
+         restano quelli della scansione come gli e' arrivata. */
+      function tentaOrientamenti(indice, ripiego) {
+        if (indice >= GIRI_OCR.length) { return Promise.resolve(ripiego); }
+        return scansiona(GIRI_OCR[indice]).then(function (pagine) {
+          if (self.EstrattoreIsps.estraiDaParole(pagine).righe.length) { return pagine; }
+          return tentaOrientamenti(indice + 1, ripiego.length ? ripiego : pagine);
         });
       }
-      return prossima(1).then(function (risultato) {
+
+      return tentaOrientamenti(0, []).then(function (risultato) {
         return lavoratore.terminate().then(function () { return risultato; }, function () {
           return risultato;
         });

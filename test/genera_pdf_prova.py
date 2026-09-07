@@ -8,8 +8,11 @@ Vengono generati:
     test/pdf/modulo_pulito.pdf        dati corretti
     test/pdf/modulo_con_errori.pdf    con gli errori tipici da correggere
     test/pdf/modulo_ordine_inverso.pdf  righe dal piu' vecchio al piu' recente
-    test/pdf/modulo_scansione.pdf     scansione finta (immagine storta e sporca)
-    test/pdf/scansione.png            la stessa pagina come immagine, per l'OCR
+    test/pdf/modulo_righe_parziali.pdf   nave con soli quattro approdi
+    test/pdf/modulo_due_pagine.pdf       tabella spezzata su due pagine
+    test/pdf/modulo_scansione.pdf        scansione finta (immagine storta e sporca)
+    test/pdf/modulo_scansione_ruotata.pdf  la stessa scansione, ma coricata
+    test/pdf/scansione.png               la stessa pagina come immagine, per l'OCR
 
 Uso:
     python3 test/genera_pdf_prova.py
@@ -205,9 +208,12 @@ def costruisci_modulo(percorso, approdi, eta="03/09/2026", spazio_prima=0):
     print("  scritto", percorso.relative_to(CARTELLA.parent.parent))
 
 
-def crea_scansione(pdf_origine, pdf_scansione, png_scansione):
+def crea_scansione(pdf_origine, pdf_scansione, png_scansione, giro=0):
     """Trasforma la prima pagina in una finta scansione: immagine in scala di
-    grigi, leggermente ruotata, con rumore e bordi sporchi."""
+    grigi, leggermente ruotata, con rumore e bordi sporchi.
+
+    Con giro=90 la pagina viene salvata coricata, come capita quando il modulo
+    entra nello scanner nel verso sbagliato."""
     import pypdfium2 as pdfium
     from PIL import Image, ImageFilter
 
@@ -230,10 +236,15 @@ def crea_scansione(pdf_origine, pdf_scansione, png_scansione):
     immagine.save(memoria, format="JPEG", quality=60)
     immagine = Image.open(memoria).convert("L")
 
-    immagine.save(png_scansione)
+    if giro:
+        immagine = immagine.rotate(giro, expand=True)
+
+    if png_scansione:
+        immagine.save(png_scansione)
     immagine.convert("RGB").save(pdf_scansione, format="PDF", resolution=200.0)
     print("  scritto", pdf_scansione.relative_to(CARTELLA.parent.parent))
-    print("  scritto", png_scansione.relative_to(CARTELLA.parent.parent))
+    if png_scansione:
+        print("  scritto", png_scansione.relative_to(CARTELLA.parent.parent))
 
 
 def main():
@@ -255,6 +266,13 @@ def main():
         CARTELLA / "modulo_pulito.pdf",
         CARTELLA / "modulo_scansione.pdf",
         CARTELLA / "scansione.png",
+    )
+    # scansione entrata nello scanner coricata: l'app deve accorgersene
+    crea_scansione(
+        CARTELLA / "modulo_pulito.pdf",
+        CARTELLA / "modulo_scansione_ruotata.pdf",
+        None,
+        giro=90,
     )
 
 

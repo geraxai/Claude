@@ -43,6 +43,7 @@
   var SCADENZA_AVVIO_OCR = 90000;
   var SCADENZA_PAGINA_OCR = 300000;
   var LATO_MASSIMO_OCR = 2600; // limite prudente per la memoria dell'iPhone
+  var GIRI_OCR = [0, 90, 270, 180]; // orientamenti provati sulle scansioni coricate
 
   var elementi = {};
   var stato = {
@@ -186,13 +187,14 @@
     });
   }
 
-  function disegnaPagina(pagina) {
+  function disegnaPagina(pagina, gradi) {
     var scala = DPI_OCR / 72;
-    var vista = pagina.getViewport({ scale: scala });
+    var rotazione = ((pagina.rotate || 0) + (gradi || 0)) % 360;
+    var vista = pagina.getViewport({ scale: scala, rotation: rotazione });
     var lato = Math.max(vista.width, vista.height);
     if (lato > LATO_MASSIMO_OCR) {
       scala = scala * (LATO_MASSIMO_OCR / lato);
-      vista = pagina.getViewport({ scale: scala });
+      vista = pagina.getViewport({ scale: scala, rotation: rotazione });
     }
     var tela = document.createElement('canvas');
     tela.width = Math.floor(vista.width);
@@ -222,30 +224,50 @@
     return parole;
   }
 
-  /* Riconosce le pagine una alla volta e si ferma appena trova la tabella. */
+  /* Riconosce le pagine una alla volta e si ferma appena trova la tabella. Se
+     con la pagina diritta non trova nulla riprova girandola: alcune scansioni
+     arrivano coricate. */
   function leggiConOcr(documento) {
     stampaStato('Il PDF è una scansione: preparazione del riconoscimento del testo\u2026', 34);
     return creaLavoratoreOcr().then(function (lavoratore) {
-      var pagine = [];
-      function prossima(numero) {
-        if (numero > documento.numPages) { return Promise.resolve(pagine); }
-        stampaStato('Riconoscimento del testo: pagina ' + numero + ' di ' + documento.numPages +
-          ' (può richiedere qualche minuto)\u2026', 36);
-        return documento.getPage(numero).then(disegnaPagina).then(function (tela) {
-          var riconoscimento = conScadenza(
-            lavoratore.recognize(tela, {}, { blocks: true }),
-            SCADENZA_PAGINA_OCR,
-            'il riconoscimento del testo di questa pagina non è riuscito entro il tempo previsto'
-          );
-          return riconoscimento.then(function (esito) {
-            pagine.push(self.EstrattoreIsps.paroleDaOcr(paroleDaRiconoscimento(esito.data)));
-            var provvisorio = self.EstrattoreIsps.estraiDaParole(pagine);
-            if (provvisorio.righe.length) { return pagine; }
-            return prossima(numero + 1);
+
+      function scansiona(gradi) {
+        var pagine = [];
+        var giro = gradi ? ', pagina girata di ' + gradi + '\u00b0' : '';
+        function prossima(numero) {
+          if (numero > documento.numPages) { return Promise.resolve(pagine); }
+          stampaStato('Riconoscimento del testo: pagina ' + numero + ' di ' + documento.numPages +
+            giro + ' (può richiedere qualche minuto)\u2026', 36);
+          return documento.getPage(numero).then(function (pagina) {
+            return disegnaPagina(pagina, gradi);
+          }).then(function (tela) {
+            var riconoscimento = conScadenza(
+              lavoratore.recognize(tela, {}, { blocks: true }),
+              SCADENZA_PAGINA_OCR,
+              'il riconoscimento del testo di questa pagina non è riuscito entro il tempo previsto'
+            );
+            return riconoscimento.then(function (esito) {
+              pagine.push(self.EstrattoreIsps.paroleDaOcr(paroleDaRiconoscimento(esito.data)));
+              if (self.EstrattoreIsps.estraiDaParole(pagine).righe.length) { return pagine; }
+              return prossima(numero + 1);
+            });
           });
+        }
+        return prossima(1);
+      }
+
+      /* Il primo tentativo (pagina diritta) e' anche quello che teniamo se
+         nessun orientamento produce la tabella: i messaggi che l'utente legge
+         restano quelli della scansione come gli e' arrivata. */
+      function tentaOrientamenti(indice, ripiego) {
+        if (indice >= GIRI_OCR.length) { return Promise.resolve(ripiego); }
+        return scansiona(GIRI_OCR[indice]).then(function (pagine) {
+          if (self.EstrattoreIsps.estraiDaParole(pagine).righe.length) { return pagine; }
+          return tentaOrientamenti(indice + 1, ripiego.length ? ripiego : pagine);
         });
       }
-      return prossima(1).then(function (risultato) {
+
+      return tentaOrientamenti(0, []).then(function (risultato) {
         return lavoratore.terminate().then(function () { return risultato; }, function () {
           return risultato;
         });
