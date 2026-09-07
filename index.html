@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Estrae dal modulo ISPS gli ultimi dieci approdi della nave e prepara il file di testo per il PMIS. Funziona sul telefono e sul PC, senza installare nulla.">
+<meta name="theme-color" content="#0b2f4a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ultimi 10 approdi">
+<title>Ultimi 10 approdi ISPS &rarr; PMIS</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icona.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icona-180.png">
+<link rel="stylesheet" href="css/stile.css">
+</head>
+<body>
+
+<header>
+  <div class="contenitore">
+    <p class="ente">Capitaneria di Porto di Catania</p>
+    <h1>Ultimi dieci approdi: dal modulo ISPS al PMIS</h1>
+    <p>
+      Carica il <em>Ship Pre-Arrival Security Information Form</em> in PDF: l'app legge la
+      tabella degli ultimi dieci approdi, corregge gli errori evidenti e prepara il file di
+      testo nel formato <code>UNLOCODE:arrivo:partenza:livello:port&nbsp;facility</code>.
+      Il PDF resta sul dispositivo, non viene inviato a nessun server.
+    </p>
+  </div>
+</header>
+
+<main>
+
+  <section class="riquadro" aria-labelledby="titoloPasso1">
+    <h2 id="titoloPasso1">1. Il PDF del modulo</h2>
+    <div id="zonaFile">
+      <input type="file" id="campoFile" accept="application/pdf,.pdf">
+      <button type="button" class="bottone bottone-principale" id="bottoneScegli">
+        Scegli il file PDF
+      </button>
+      <p class="suggerimento" id="suggerimentoZona">
+        Va bene qualunque nome di file. Sul PC puoi anche trascinare il PDF qui.
+      </p>
+      <p id="nomeFile">Nessun file selezionato.</p>
+    </div>
+
+    <div id="avanzamento" class="nascosto" aria-live="polite">
+      <p id="testoStato">In attesa&hellip;</p>
+      <div class="barra"><div id="barraAvanzamento"></div></div>
+    </div>
+
+    <div id="erroreBox" class="nascosto" role="alert"></div>
+  </section>
+
+  <section class="riquadro nascosto" id="riquadroRisultati" aria-labelledby="titoloPasso2">
+    <h2 id="titoloPasso2">2. Controllo dei dati</h2>
+    <div class="riepilogo-esito" id="riepilogoEsito"></div>
+    <div id="elencoApprodi"></div>
+    <div class="azioni">
+      <button type="button" class="bottone bottone-secondario bottone-minuto" id="bottoneAggiungi">
+        Aggiungi una riga
+      </button>
+    </div>
+  </section>
+
+  <section class="riquadro nascosto" id="riquadroFile" aria-labelledby="titoloPasso3">
+    <h2 id="titoloPasso3">3. Il file per il PMIS</h2>
+    <label class="campo">
+      <span>Contenuto del file (modificabile)</span>
+      <textarea id="testoFinale" spellcheck="false" autocapitalize="off" autocorrect="off"></textarea>
+    </label>
+    <p class="riga-avviso nascosto" id="avvisoModificaManuale">
+      Il testo è stato modificato a mano: le caselle del punto 2 non lo aggiornano più.
+      <button type="button" class="bottone bottone-secondario bottone-minuto" id="bottoneRigenera">
+        Rigenera dalle caselle
+      </button>
+    </p>
+    <div class="azioni">
+      <button type="button" class="bottone bottone-azione" id="bottoneScarica">Scarica il .txt</button>
+      <button type="button" class="bottone bottone-secondario nascosto" id="bottoneCondividi">Condividi</button>
+      <button type="button" class="bottone bottone-secondario" id="bottoneCopia">Copia il testo</button>
+    </div>
+    <p class="suggerimento" id="suggerimentoSalvataggio"></p>
+  </section>
+
+  <details class="opzioni" id="riquadroOpzioni">
+    <summary>Opzioni (di solito non servono)</summary>
+    <div class="griglia-opzioni">
+      <label class="campo">
+        <span>Formato delle date</span>
+        <select id="opzioneFormatoData">
+          <option value="gg/mm/aaaa" selected>gg/mm/aaaa</option>
+          <option value="gg/mm/aa">gg/mm/aa</option>
+          <option value="aaaa-mm-gg">aaaa-mm-gg</option>
+          <option value="ggmmaaaa">ggmmaaaa</option>
+        </select>
+      </label>
+      <label class="campo">
+        <span>Port facility</span>
+        <select id="opzioneFormatoFacility">
+          <option value="originale" selected>Come sul modulo</option>
+          <option value="codice">Codice completo (ITCTA-0001)</option>
+          <option value="numero">Solo il numero (0001)</option>
+        </select>
+      </label>
+      <label class="campo">
+        <span>Ordine delle righe</span>
+        <select id="opzioneOrdine">
+          <option value="pdf" selected>Come sul modulo</option>
+          <option value="recente">Dal più recente</option>
+          <option value="vecchio">Dal più vecchio</option>
+        </select>
+      </label>
+    </div>
+    <div class="griglia-opzioni" id="zonaOffline">
+      <div class="campo campo-largo">
+        <span>Uso senza collegamento a internet</span>
+        <button type="button" class="bottone bottone-secondario bottone-minuto" id="bottoneOffline">
+          Scarica anche il riconoscimento del testo (13 MB)
+        </button>
+        <p class="suggerimento" id="statoOffline">
+          L'app funziona già senza rete con i PDF che contengono testo. Questo comando
+          aggiunge anche la lettura delle scansioni.
+        </p>
+      </div>
+    </div>
+  </details>
+
+</main>
+
+<footer>
+  <p>Elaborazione interamente sul dispositivo: nessun dato viene trasmesso.</p>
+  <p id="pieDati"></p>
+</footer>
+
+<script src="vendor/pdfjs/pdf.min.js"></script>
+<script src="dati/porti.js"></script>
+<script src="js/database-porti.js"></script>
+<script src="js/estrattore.js"></script>
+<script src="js/correzioni.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

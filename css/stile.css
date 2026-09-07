@@ -1,0 +1,382 @@
+/* Foglio di stile dell'app: sobrio, leggibile e adatto sia al PC sia al
+   telefono. Un solo file, niente librerie esterne. */
+
+:root {
+  --blu-scuro: #0b2f4a;
+  --blu: #12507a;
+  --blu-chiaro: #eaf1f6;
+  --ottone: #b8791f;
+  --testo: #23313a;
+  --testo-tenue: #5c6b74;
+  --bordo: #d3dfe7;
+  --bianco: #ffffff;
+  --rosso: #9d2f24;
+  --rosso-chiaro: #fbecea;
+  --verde: #256b4a;
+  --verde-chiaro: #e7f3ec;
+  --giallo: #8a6414;
+  --giallo-chiaro: #fdf4e0;
+  --ombra: 0 1px 2px rgba(11, 47, 74, .06), 0 6px 16px rgba(11, 47, 74, .06);
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--testo);
+  background: var(--blu-chiaro);
+  padding-bottom: calc(32px + env(safe-area-inset-bottom));
+}
+
+/* ---------------------------------------------------------------- testata */
+
+header {
+  background: linear-gradient(160deg, var(--blu-scuro), var(--blu));
+  color: var(--bianco);
+  padding: 22px 20px 20px;
+  padding-top: calc(22px + env(safe-area-inset-top));
+}
+
+header .contenitore { max-width: 940px; margin: 0 auto; }
+
+header .ente {
+  margin: 0 0 6px;
+  font-size: 13px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #a9c7db;
+}
+
+header h1 {
+  margin: 0 0 8px;
+  font-size: 23px;
+  line-height: 1.25;
+  font-weight: 650;
+}
+
+header p {
+  margin: 0;
+  max-width: 68ch;
+  font-size: 14.5px;
+  color: #d3e4ef;
+}
+
+main {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 18px 14px 40px;
+}
+
+/* --------------------------------------------------------------- riquadri */
+
+.riquadro {
+  background: var(--bianco);
+  border: 1px solid var(--bordo);
+  border-radius: 14px;
+  box-shadow: var(--ombra);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.riquadro > h2 {
+  margin: 0 0 14px;
+  font-size: 13px;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--blu);
+}
+
+.nascosto { display: none !important; }
+
+/* ------------------------------------------------------- scelta del file */
+
+#zonaFile {
+  border: 2px dashed var(--bordo);
+  border-radius: 12px;
+  padding: 22px 16px;
+  text-align: center;
+  transition: border-color .15s, background .15s;
+}
+
+#zonaFile.evidenziata {
+  border-color: var(--blu);
+  background: #f4f9fc;
+}
+
+#campoFile { position: absolute; width: 1px; height: 1px; opacity: 0; }
+
+.bottone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 13px 20px;
+  border: none;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.bottone:disabled { opacity: .5; cursor: default; }
+.bottone-principale { background: var(--blu); color: var(--bianco); }
+.bottone-principale:hover:not(:disabled) { background: var(--blu-scuro); }
+.bottone-azione { background: var(--ottone); color: var(--bianco); }
+.bottone-azione:hover:not(:disabled) { filter: brightness(.93); }
+
+.bottone-secondario {
+  background: var(--bianco);
+  color: var(--blu-scuro);
+  border: 1px solid var(--bordo);
+}
+
+.bottone-secondario:hover:not(:disabled) { background: var(--blu-chiaro); }
+
+.bottone-minuto {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+#nomeFile {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--testo-tenue);
+  word-break: break-all;
+}
+
+.suggerimento {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  color: var(--testo-tenue);
+}
+
+/* ------------------------------------------------------------ avanzamento */
+
+#avanzamento { margin-top: 16px; }
+
+#testoStato {
+  margin: 0 0 8px;
+  font-size: 14.5px;
+  color: var(--blu-scuro);
+}
+
+.barra {
+  height: 8px;
+  background: #e3ecf1;
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.barra > div {
+  height: 100%;
+  width: 0;
+  background: var(--ottone);
+  transition: width .25s ease;
+}
+
+#erroreBox {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #e8c6c1;
+  border-radius: 10px;
+  background: var(--rosso-chiaro);
+  color: var(--rosso);
+  font-size: 14.5px;
+}
+
+/* ------------------------------------------------------------- risultati */
+
+.riepilogo-esito {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.etichetta {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.etichetta-ok { background: var(--verde-chiaro); color: var(--verde); }
+.etichetta-attenzione { background: var(--giallo-chiaro); color: var(--giallo); }
+.etichetta-neutra { background: var(--blu-chiaro); color: var(--blu); }
+
+.approdo {
+  border: 1px solid var(--bordo);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fcfdfe;
+}
+
+.approdo.da-controllare { border-color: #e6cf9a; background: #fffdf7; }
+.approdo.incompleta { border-color: #e8c6c1; background: #fffbfa; }
+
+.approdo-testa {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.numero-riga {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--blu);
+  color: var(--bianco);
+  font-size: 13px;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.descrizione-approdo {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--testo-tenue);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campi {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+
+.campo > span {
+  font-size: 11.5px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--testo-tenue);
+}
+
+.campo-largo { grid-column: 1 / -1; }
+
+input[type="text"], select, textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--bordo);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--testo);
+  background: var(--bianco);
+}
+
+input[type="text"]:focus, select:focus, textarea:focus {
+  outline: 2px solid var(--blu);
+  outline-offset: -1px;
+}
+
+input.vuoto { background: var(--rosso-chiaro); }
+
+.note-riga {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--ottone);
+  background: var(--giallo-chiaro);
+  border-radius: 0 8px 8px 0;
+  font-size: 13.5px;
+  color: #5f4a1c;
+}
+
+.note-riga ul { margin: 0; padding-left: 18px; }
+.note-riga li + li { margin-top: 4px; }
+
+.azioni-riga { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+.azioni { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.azioni .bottone { flex: 1 1 190px; }
+
+#testoFinale {
+  margin-top: 4px;
+  min-height: 190px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+
+.riga-avviso {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--giallo-chiaro);
+  color: var(--giallo);
+  font-size: 13.5px;
+}
+
+/* --------------------------------------------------------------- opzioni */
+
+details.opzioni {
+  border: 1px solid var(--bordo);
+  border-radius: 12px;
+  background: var(--bianco);
+  padding: 4px 14px;
+  margin-bottom: 16px;
+  box-shadow: var(--ombra);
+}
+
+details.opzioni summary {
+  cursor: pointer;
+  padding: 12px 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--blu-scuro);
+}
+
+.griglia-opzioni {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 4px 0 14px;
+}
+
+footer {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 0 14px 20px;
+  font-size: 12.5px;
+  color: var(--testo-tenue);
+  text-align: center;
+}
+
+footer p { margin: 4px 0; }
+
+/* ---------------------------------------------------------- schermi larghi */
+
+@media (min-width: 760px) {
+  header h1 { font-size: 27px; }
+
+  .campi { grid-template-columns: 7.5rem 8rem 8rem 4.5rem minmax(0, 1fr); }
+
+  .campo-largo { grid-column: auto; }
+
+  .griglia-opzioni { grid-template-columns: repeat(3, 1fr); }
+}

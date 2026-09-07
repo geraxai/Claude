@@ -540,16 +540,30 @@
     }
 
     // codice GISIS: "ITCTA-0001", "ITCTA 0001", "IT CTA 0001"
-    var conCodice = testo.match(/^([A-Za-z]{2})\s*([A-Za-z0-9]{3})\s*[-\u2010-\u2015\s]?\s*(\d{1,4})$/);
+    var conCodice = testo.match(/^([A-Za-z]{2})\s?([A-Za-z0-9]{3})\s*[-\u2010-\u2015\s]?\s*(\d{1,4})$/);
     var soloNumero = testo.match(/^n?[.\s]*([0-9]{1,4})$/i);
     var numero = '';
     var codicePorto = '';
+    var testoOriginale = testo;
 
     if (conCodice) {
       codicePorto = (conCodice[1] + conCodice[2]).toUpperCase();
       numero = conCodice[3];
     } else if (soloNumero) {
       numero = soloNumero[1];
+    } else if (unlocode) {
+      // l'OCR lascia spesso qualche carattere di troppo attorno alla cella:
+      // se dentro c'e' il codice del porto seguito dal numero, teniamo solo quello
+      var atteso = new RegExp(
+        unlocode.slice(0, 2) + '\\s?' + unlocode.slice(2) + '\\s*[-\u2010-\u2015\\s]?\\s*(\\d{1,4})(?!\\d)',
+        'i'
+      );
+      var dentro = testo.match(atteso);
+      if (dentro) {
+        codicePorto = unlocode;
+        numero = dentro[1];
+        testo = unlocode + '-' + dentro[1];
+      }
     }
 
     if (numero) {
@@ -571,8 +585,8 @@
       risultato = (codicePorto || unlocode || '') + '-' + numero;
     }
 
-    if (risultato !== testo) {
-      note.push('Port facility "' + testo + '" scritta come ' + risultato + '.');
+    if (risultato !== testoOriginale) {
+      note.push('Port facility "' + testoOriginale + '" scritta come ' + risultato + '.');
     }
     return { facility: risultato, numero: numero, sicuro: true };
   }

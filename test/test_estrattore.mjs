@@ -228,6 +228,12 @@ function testLivelliEFacility() {
     'Terminal Rada San Filippo');
   confronta('facility come codice completo',
     Correzioni.correggiFacility({ facility: '12' }, 'ITCTA', 'codice', note).facility, 'ITCTA-0012');
+  confronta('sporcizia dell\'OCR attorno al codice',
+    Correzioni.correggiFacility({ facility: 'Ske MTMLA-0002' }, 'MTMLA', 'originale', note).facility,
+    'MTMLA-0002');
+  confronta('nome con numero non confuso con un codice',
+    Correzioni.correggiFacility({ facility: 'Malta Freeport Terminal 2' }, 'MTMAR', 'originale', note).facility,
+    'Malta Freeport Terminal 2');
 }
 
 (async function eseguiTest() {
