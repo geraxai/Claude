@@ -28,9 +28,6 @@
   ];
   var FRASE_ETA = ['EXPECTEDDATEANDTIMEOFARRIVAL', 'DATEANDTIMEOFARRIVAL'];
 
-  /* Una data: 1 o 2 cifre, separatore, 1 o 2 cifre, separatore, 2-4 cifre.
-     Le lettere confuse dall'OCR con le cifre vengono normalizzate prima. */
-  var REGEX_DATA = /(\d{1,4})\s*[\/\.\-]\s*(\d{1,2})\s*[\/\.\-]\s*(\d{2,4})/g;
   var REGEX_LOCODE = /^[A-Z]{2}[A-Z0-9]{3}$/;
   var REGEX_SOLO_NUMERO_RIGA = /^\(?(10|[1-9])[\.\)]?$/;
 
@@ -225,50 +222,81 @@
     return risultato;
   }
 
-  /* Rende "numerico" un pezzo di testo che dovrebbe contenere una data:
-     "0l/l2/2O24" -> "01/12/2024". Sostituisce anche gli spazi usati come
-     separatore ("12 05 2024") e i separatori raddoppiati. */
+  /* Uniforma i separatori: "12 / 05 / 2024" -> "12/05/2024". */
   function normalizzaPezzoData(testo) {
-    var t = cifreDaTesto(testo);
-    t = t.replace(/[\u2010-\u2015]/g, '-');
-    t = t.replace(/\s*([\/\.\-])\s*/g, '$1');
-    t = t.replace(/(\d)\s+(\d)/g, '$1 $2');
-    return t;
+    return String(testo || '')
+      .replace(/[\u2010-\u2015]/g, '-')
+      .replace(/\s*([\/\.\-])\s*/g, '$1');
   }
 
+  /* Dentro una data accettiamo le cifre e tutte le lettere che l'OCR ci
+     scambia per cifre, cosi' "0l/l2/2O24" resta riconoscibile. */
+  var CIFRE_O_LETTERE = '0-9' + Object.keys(CIFRE_CONFUSE).map(function (carattere) {
+    return /[A-Za-z0-9]/.test(carattere) ? carattere : '\\' + carattere;
+  }).join('');
+  var REGEX_DATA_TOLLERANTE = new RegExp(
+    '([' + CIFRE_O_LETTERE + ']{1,4})[\\/.\\-]([' + CIFRE_O_LETTERE + ']{1,2})[\\/.\\-]([' +
+    CIFRE_O_LETTERE + ']{2,4})', 'g'
+  );
+
+  var MESI = {
+    GEN: 1, JAN: 1, FEB: 2, MAR: 3, APR: 4, MAG: 5, MAY: 5, GIU: 6, JUN: 6,
+    LUG: 7, JUL: 7, AGO: 8, AUG: 8, SET: 9, SEP: 9, OTT: 10, OCT: 10,
+    NOV: 11, DIC: 12, DEC: 12
+  };
+  var REGEX_DATA_CON_MESE = /(\d{1,2})\s*[\/.\- ]\s*([A-Za-z]{3,10})\.?\s*[\/.\- ]\s*(\d{2,4})/g;
+
+  /*
+   * Cerca le date dentro un testo. Riconosce "28/08/2026", "28.8.26",
+   * "28 AUG 2026", "28/ago/2026", "28 08 2026" e "28082026", e sopporta le
+   * lettere che l'OCR mette al posto delle cifre ("0l/l2/2O24").
+   */
   function trovaDate(testo) {
-    var normalizzato = normalizzaPezzoData(testo);
-    // accetta anche "12 05 2024" e "12052024"
+    var pulito = normalizzaPezzoData(testo);
     var candidati = [];
-    var regex = new RegExp(REGEX_DATA.source, 'g');
     var trovato;
-    while ((trovato = regex.exec(normalizzato)) !== null) {
+
+    function aggiungi(intero, indice, giorno, mese, anno) {
       candidati.push({
-        testo: trovato[0],
-        indice: trovato.index,
-        parti: [trovato[1], trovato[2], trovato[3]]
+        testo: intero,
+        indice: indice,
+        parti: [giorno, mese, anno]
       });
     }
+
+    var conMese = new RegExp(REGEX_DATA_CON_MESE.source, 'g');
+    while ((trovato = conMese.exec(pulito)) !== null) {
+      var numeroMese = MESI[trovato[2].slice(0, 3).toUpperCase()];
+      if (numeroMese) {
+        aggiungi(trovato[0], trovato.index, trovato[1], String(numeroMese), trovato[3]);
+      }
+    }
+
+    if (!candidati.length) {
+      var tollerante = new RegExp(REGEX_DATA_TOLLERANTE.source, 'g');
+      while ((trovato = tollerante.exec(pulito)) !== null) {
+        aggiungi(
+          trovato[0], trovato.index,
+          cifreDaTesto(trovato[1]), cifreDaTesto(trovato[2]), cifreDaTesto(trovato[3])
+        );
+      }
+    }
+
+    // senza separatori accettiamo solo cifre vere, per non trasformare per
+    // sbaglio il nome di un porto in una data
     if (!candidati.length) {
       var conSpazi = /(\d{1,2})\s(\d{1,2})\s(\d{2,4})/g;
-      while ((trovato = conSpazi.exec(normalizzato)) !== null) {
-        candidati.push({
-          testo: trovato[0],
-          indice: trovato.index,
-          parti: [trovato[1], trovato[2], trovato[3]]
-        });
+      while ((trovato = conSpazi.exec(pulito)) !== null) {
+        aggiungi(trovato[0], trovato.index, trovato[1], trovato[2], trovato[3]);
       }
     }
     if (!candidati.length) {
       var attaccate = /\b(\d{2})(\d{2})(\d{4})\b/g;
-      while ((trovato = attaccate.exec(normalizzato)) !== null) {
-        candidati.push({
-          testo: trovato[0],
-          indice: trovato.index,
-          parti: [trovato[1], trovato[2], trovato[3]]
-        });
+      while ((trovato = attaccate.exec(pulito)) !== null) {
+        aggiungi(trovato[0], trovato.index, trovato[1], trovato[2], trovato[3]);
       }
     }
+
     return candidati;
   }
 
@@ -608,42 +636,37 @@
   function estraiDaParole(paginaParole) {
     var diagnostica = { pagine: paginaParole.length, righeTesto: 0, tabellaTrovata: false };
     var riferimentoGlobale = null;
+    var righePerPagina = [];
 
     for (var p = 0; p < paginaParole.length; p++) {
       var righe = raggruppaInRighe(paginaParole[p]);
+      righePerPagina.push(righe);
       diagnostica.righeTesto += righe.length;
       if (!riferimentoGlobale) {
         var riferimento = trovaDataRiferimento(righe);
         if (riferimento) { riferimentoGlobale = riferimento; }
       }
-      var inizio = indiceInizioTabella(righe);
+    }
+
+    for (var pagina = 0; pagina < righePerPagina.length; pagina++) {
+      var inizio = indiceInizioTabella(righePerPagina[pagina]);
       if (inizio < 0) { continue; }
-      var fine = indiceFineTabella(righe, inizio);
-      var lette = leggiRigheTabella(righe, inizio, fine);
+      // la tabella puo' proseguire sulle pagine successive: le uniamo, tanto
+      // la lettura si ferma da sola alla domanda che segue la tabella
+      var complessive = righePerPagina[pagina];
+      for (var successiva = pagina + 1; successiva < righePerPagina.length; successiva++) {
+        complessive = complessive.concat(righePerPagina[successiva]);
+      }
+      var fine = indiceFineTabella(complessive, inizio);
+      var lette = leggiRigheTabella(complessive, inizio, fine);
       if (lette.length) {
         diagnostica.tabellaTrovata = true;
         return {
           righe: lette,
           riferimento: riferimentoGlobale,
-          pagina: p + 1,
+          pagina: pagina + 1,
           diagnostica: diagnostica
         };
-      }
-      // la tabella comincia in fondo alla pagina e continua sulla successiva
-      if (p + 1 < paginaParole.length) {
-        var righeSuccessive = raggruppaInRighe(paginaParole[p + 1]);
-        var unite = righe.slice(inizio).concat(righeSuccessive);
-        var fineUnite = indiceFineTabella(unite, 0);
-        var letteUnite = leggiRigheTabella(unite, 0, fineUnite);
-        if (letteUnite.length) {
-          diagnostica.tabellaTrovata = true;
-          return {
-            righe: letteUnite,
-            riferimento: riferimentoGlobale,
-            pagina: p + 1,
-            diagnostica: diagnostica
-          };
-        }
       }
     }
 

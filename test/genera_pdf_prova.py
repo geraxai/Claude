@@ -132,7 +132,7 @@ def blocco_intestazione_nave(eta):
     return tabella
 
 
-def costruisci_modulo(percorso, approdi, eta="03/09/2026"):
+def costruisci_modulo(percorso, approdi, eta="03/09/2026", spazio_prima=0):
     documento = SimpleDocTemplate(
         str(percorso),
         pagesize=A4,
@@ -161,7 +161,7 @@ def costruisci_modulo(percorso, approdi, eta="03/09/2026"):
             "Security Level at which the ship is currently operating? Security Level 1",
             STILE_TESTO,
         ),
-        Spacer(1, 3 * mm),
+        Spacer(1, 3 * mm + spazio_prima),
         Paragraph(
             "List the last ten calls at port facilities in chronological order "
             "(most recent call first):",
@@ -242,6 +242,15 @@ def main():
     costruisci_modulo(CARTELLA / "modulo_pulito.pdf", APPRODI_PULITI)
     costruisci_modulo(CARTELLA / "modulo_con_errori.pdf", APPRODI_CON_ERRORI)
     costruisci_modulo(CARTELLA / "modulo_ordine_inverso.pdf", list(reversed(APPRODI_PULITI)))
+    # nave con soli quattro approdi: le righe restanti del modulo sono vuote
+    costruisci_modulo(
+        CARTELLA / "modulo_righe_parziali.pdf",
+        APPRODI_PULITI[:4] + [("", "", "", "", "", "", "")] * 6,
+    )
+    # tabella che comincia in fondo alla prima pagina e continua sulla seconda
+    costruisci_modulo(
+        CARTELLA / "modulo_due_pagine.pdf", APPRODI_PULITI, spazio_prima=95 * mm
+    )
     crea_scansione(
         CARTELLA / "modulo_pulito.pdf",
         CARTELLA / "modulo_scansione.pdf",

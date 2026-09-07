@@ -122,6 +122,29 @@ async function testOrdineInverso() {
   }
 }
 
+async function testRigheParziali() {
+  console.log('\nModulo con solo quattro approdi (righe restanti vuote)');
+  const { esito } = await elabora('modulo_righe_parziali.pdf');
+  confronta('quattro approdi estratti', esito.righe.length, 4);
+  const righe = Correzioni.formattaTesto(esito.righe).trim().split('\n');
+  for (let i = 0; i < 4; i++) {
+    confronta('riga ' + (i + 1), righe[i], ATTESO_PULITO[i]);
+  }
+  verifica('nessuna riga inventata dalle celle vuote',
+    esito.righe.every((riga) => riga.unlocode && riga.arrivo && riga.partenza));
+}
+
+async function testTabellaSuDuePagine() {
+  console.log('\nModulo con la tabella spezzata su due pagine');
+  const { estratto, esito } = await elabora('modulo_due_pagine.pdf');
+  confronta('pagine del PDF', estratto.diagnostica.pagine, 2);
+  confronta('dieci approdi estratti', esito.righe.length, 10);
+  const righe = Correzioni.formattaTesto(esito.righe).trim().split('\n');
+  for (let i = 0; i < ATTESO_PULITO.length; i++) {
+    confronta('riga ' + (i + 1), righe[i], ATTESO_PULITO[i]);
+  }
+}
+
 async function testOpzioni() {
   console.log('\nOpzioni di formato');
   const conData = await elabora('modulo_pulito.pdf', { formatoData: 'aaaa-mm-gg' });
@@ -245,6 +268,8 @@ function testLivelliEFacility() {
   await testModuloPulito();
   await testModuloConErrori();
   await testOrdineInverso();
+  await testRigheParziali();
+  await testTabellaSuDuePagine();
   await testOpzioni();
   console.log('\nRisultato: ' + superati + ' verifiche superate, ' + falliti + ' fallite');
   process.exit(falliti ? 1 : 0);
