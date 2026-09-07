@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Estrattore ISPS → PMIS</title>
+<style>
+  :root{
+    --blu-profondo:#0b2f4a;
+    --blu-mare:#12507a;
+    --blu-chiaro:#e8f0f5;
+    --ottone:#c98a3a;
+    --grigio-testo:#2a3439;
+    --bordo:#d5e0e6;
+    --bianco:#ffffff;
+    --rosso:#a3342a;
+    --verde:#2f6f4f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--blu-chiaro);
+    color:var(--grigio-testo);
+    min-height:100vh;
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  header{
+    background:linear-gradient(180deg,var(--blu-profondo),var(--blu-mare));
+    color:var(--bianco);
+    padding:28px 20px 22px;
+    text-align:left;
+  }
+  header .eyebrow{
+    font-size:13px;
+    letter-spacing:.02em;
+    color:#bcd4e3;
+    margin:0 0 4px;
+  }
+  header h1{
+    font-size:22px;
+    line-height:1.25;
+    margin:0 0 6px;
+    font-weight:650;
+  }
+  header p{
+    margin:0;
+    font-size:14px;
+    color:#cfe0ea;
+    max-width:60ch;
+  }
+
+  main{
+    max-width:640px;
+    margin:0 auto;
+    padding:20px 16px 60px;
+  }
+
+  .scheda{
+    background:var(--bianco);
+    border:1px solid var(--bordo);
+    border-radius:14px;
+    padding:20px;
+    margin-bottom:18px;
+  }
+  .scheda h2{
+    font-size:15px;
+    margin:0 0 14px;
+    color:var(--blu-profondo);
+  }
+
+  #fileInput{
+    position:absolute;
+    width:1px;height:1px;
+    opacity:0;overflow:hidden;
+  }
+  label.btn-carica{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    background:var(--blu-mare);
+    color:var(--bianco);
+    font-size:16px;
+    font-weight:600;
+    padding:16px;
+    border-radius:10px;
+    cursor:pointer;
+    user-select:none;
+    touch-action:manipulation;
+  }
+  label.btn-carica:active{ background:var(--blu-profondo); }
+
+  #nomeFile{
+    margin-top:10px;
+    font-size:13px;
+    color:#5a6a72;
+    text-align:center;
+  }
+
+  #statoWrap{ margin-top:16px; display:none; }
+  #statoTesto{
+    font-size:14px;
+    margin-bottom:8px;
+    color:var(--blu-profondo);
+  }
+  .barra{
+    height:8px;
+    background:#e2ebef;
+    border-radius:99px;
+    overflow:hidden;
+  }
+  .barra > div{
+    height:100%;
+    width:0%;
+    background:var(--ottone);
+    transition:width .25s ease;
+  }
+
+  #erroreBox{
+    display:none;
+    background:#fbeceb;
+    border:1px solid #eec9c5;
+    color:var(--rosso);
+    padding:14px;
+    border-radius:10px;
+    font-size:14px;
+    margin-top:14px;
+  }
+
+  #risultatoWrap{ display:none; }
+
+  .tabella-scroll{
+    overflow-x:auto;
+    border:1px solid var(--bordo);
+    border-radius:10px;
+  }
+  table{
+    border-collapse:collapse;
+    width:100%;
+    min-width:560px;
+    font-size:13px;
+  }
+  th, td{
+    padding:9px 10px;
+    text-align:left;
+    border-bottom:1px solid var(--bordo);
+    white-space:nowrap;
+  }
+  th{
+    background:var(--blu-chiaro);
+    color:var(--blu-profondo);
+    font-weight:650;
+    font-size:12px;
+  }
+  tr:last-child td{ border-bottom:none; }
+
+  .riga-azioni{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-top:16px;
+  }
+  .btn{
+    flex:1 1 auto;
+    min-width:150px;
+    text-align:center;
+    padding:14px 16px;
+    border-radius:10px;
+    font-size:15px;
+    font-weight:600;
+    border:none;
+    cursor:pointer;
+    touch-action:manipulation;
+  }
+  .btn-primario{ background:var(--ottone); color:#fff; }
+  .btn-primario:active{ filter:brightness(0.92); }
+  .btn-secondario{ background:var(--blu-chiaro); color:var(--blu-profondo); border:1px solid var(--bordo); }
+  .btn-secondario:active{ background:#dbe7ee; }
+
+  #anteprimaTxt{
+    width:100%;
+    margin-top:14px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:13px;
+    padding:12px;
+    border-radius:10px;
+    border:1px solid var(--bordo);
+    background:#fbfdfe;
+    color:var(--grigio-testo);
+    min-height:150px;
+    resize:vertical;
+  }
+
+  .nota{
+    font-size:12.5px;
+    color:#5a6a72;
+    line-height:1.5;
+    margin-top:14px;
+  }
+
+  .badge-ok{
+    display:inline-block;
+    font-size:12px;
+    background:#e6f2ea;
+    color:var(--verde);
+    border:1px solid #c9e4d3;
+    padding:3px 9px;
+    border-radius:99px;
+    margin-bottom:10px;
+  }
+
+  footer{
+    text-align:center;
+    font-size:12px;
+    color:#7c8a90;
+    padding:0 16px 30px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="eyebrow">Capitaneria di Porto di Catania — modulo ISPS</p>
+  <h1>Estrattore ultimi 10 approdi</h1>
+  <p>Carica il modulo "Ship Pre-Arrival Security Information Form" (PDF) e ottieni subito il file .txt per il PMIS. Tutta l'elaborazione avviene sul tuo dispositivo: il PDF non viene inviato a nessun server.</p>
+</header>
+
+<main>
+
+  <div class="scheda">
+    <h2>1. Carica il PDF</h2>
+    <input type="file" id="fileInput" accept="application/pdf">
+    <label for="fileInput" class="btn-carica">📄 Scegli file PDF</label>
+    <div id="nomeFile">Nessun file selezionato</div>
+
+    <div id="statoWrap">
+      <div id="statoTesto">In attesa...</div>
+      <div class="barra"><div id="barraInterna"></div></div>
+    </div>
+
+    <div id="erroreBox"></div>
+  </div>
+
+  <div class="scheda" id="risultatoWrap">
+    <h2>2. Controlla i dati estratti</h2>
+    <div id="badgeRighe" class="badge-ok"></div>
+
+    <div class="tabella-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>UNLOCODE</th>
+            <th>Arrivo</th>
+            <th>Partenza</th>
+            <th>SL</th>
+            <th>Port facility</th>
+          </tr>
+        </thead>
+        <tbody id="corpoTabella"></tbody>
+      </table>
+    </div>
+
+    <h2 style="margin-top:20px;">3. Scarica o copia il file</h2>
+    <div class="riga-azioni">
+      <button class="btn btn-primario" id="btnScarica">⬇️ Salva / Condividi .txt</button>
+      <button class="btn btn-secondario" id="btnCopia">📋 Copia negli appunti</button>
+    </div>
+    <textarea id="anteprimaTxt" readonly></textarea>
+    <p class="nota">Su iPhone: tocca <strong>"Salva / Condividi"</strong> per aprire il foglio di condivisione di iOS e salvare il file in "File" o inviarlo (Mail, Messaggi, ecc.). Se il tuo browser non supporta la condivisione diretta, usa "Copia negli appunti" e incolla il contenuto in Note o in un'app di testo, poi salvalo come .txt.</p>
+  </div>
+
+  <p class="nota" style="text-align:center;">
+    Il modulo ISPS è quasi sempre una scansione: l'app esegue il riconoscimento del testo (OCR) direttamente nel browser. La prima elaborazione può richiedere 20–60 secondi, soprattutto su iPhone.
+  </p>
+</main>
+
+<footer>Elaborazione 100% locale — nessun dato lasciato il dispositivo.</footer>
+
+<!-- Tesseract.js (OCR) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/6.0.0/tesseract.min.js"></script>
+
+<!-- pdf.js (lettura PDF) - build "classica" (non a moduli): più affidabile su Safari/iPhone -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const MAX_RIGHE = 10;
+const ANCORA_INIZIO = /last\s+ten\s+calls/i;
+const ANCORA_FINE = /did the ship take any special/i;
+const DATE_REGEX = /\b(\d{2}\/\d{2}\/\d{4})\b/g;
+const UNLOCODE_REGEX = /\b([A-Z]{2}[A-Z0-9]{3})\b/;
+const SL_REGEX = /SL\s*=?\s*(\d)/i;
+// Niente lookbehind/lookahead qui: non supportati su iOS Safari < 16.4.
+// Va bene un match "semplice" perché viene cercato solo nel testo che
+// segue l'UNLOCODE, dove non compaiono altre date.
+const FACILITY_REGEX = /\b(\d{3,5})\b/;
+
+const fileInput = document.getElementById('fileInput');
+const nomeFile = document.getElementById('nomeFile');
+const statoWrap = document.getElementById('statoWrap');
+const statoTesto = document.getElementById('statoTesto');
+const barraInterna = document.getElementById('barraInterna');
+const erroreBox = document.getElementById('erroreBox');
+const risultatoWrap = document.getElementById('risultatoWrap');
+const badgeRighe = document.getElementById('badgeRighe');
+const corpoTabella = document.getElementById('corpoTabella');
+const anteprimaTxt = document.getElementById('anteprimaTxt');
+const btnScarica = document.getElementById('btnScarica');
+const btnCopia = document.getElementById('btnCopia');
+
+let nomeBase = 'estratto_pmis';
+let testoFinale = '';
+
+fileInput.addEventListener('change', onFileSelected);
+btnScarica.addEventListener('click', scaricaOCondividi);
+btnCopia.addEventListener('click', copiaNegliAppunti);
+
+function mostraStato(testo, percentuale){
+  statoWrap.style.display = 'block';
+  statoTesto.textContent = testo;
+  if (typeof percentuale === 'number'){
+    barraInterna.style.width = Math.max(0, Math.min(100, percentuale)) + '%';
+  }
+}
+
+function mostraErrore(msg){
+  erroreBox.style.display = 'block';
+  erroreBox.textContent = msg;
+  statoWrap.style.display = 'none';
+}
+
+function nascondiErrore(){
+  erroreBox.style.display = 'none';
+}
+
+async function onFileSelected(e){
+  const file = e.target.files[0];
+  if (!file) return;
+
+  nascondiErrore();
+  risultatoWrap.style.display = 'none';
+  nomeFile.textContent = file.name;
+  nomeBase = file.name.replace(/\.pdf$/i, '') + '_pmis';
+
+  try {
+    mostraStato('Apertura del PDF...', 2);
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    // Prova prima il testo nativo (PDF non scansionati)
+    let righe = await estraiRigheTestoNativo(pdf);
+    let usatoOcr = false;
+
+    if (!righeUtili(righe)) {
+      usatoOcr = true;
+      righe = await estraiRigheConOcr(pdf);
+    }
+
+    mostraStato('Analisi della tabella approdi...', 96);
+    const dati = estraiTabellaApprodi(righe);
+
+    mostraRisultati(dati);
+    mostraStato(`Completato${usatoOcr ? ' (OCR)' : ''}.`, 100);
+    setTimeout(() => { statoWrap.style.display = 'none'; }, 1200);
+
+  } catch (err) {
+    console.error(err);
+    mostraErrore(err.message || 'Errore imprevisto durante l\'elaborazione del PDF.');
+  }
+}
+
+function righeUtili(righe){
+  // Vero se troviamo l'ancora della tabella nel testo nativo
+  return righe.some(r => ANCORA_INIZIO.test(r));
+}
+
+async function estraiRigheTestoNativo(pdf){
+  const righe = [];
+  for (let i = 1; i <= pdf.numPages; i++){
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    // Raggruppa per riga in base alla coordinata Y (trasformata)
+    const parole = content.items.map(it => ({
+      testo: it.str,
+      x: it.transform[4],
+      y: it.transform[5],
+    })).filter(p => p.testo.trim() !== '');
+    righe.push(...raggruppaInRighe(parole, 3));
+  }
+  return righe;
+}
+
+async function estraiRigheConOcr(pdf){
+  const worker = await Tesseract.createWorker('eng');
+  const righe = [];
+  try {
+    for (let i = 1; i <= pdf.numPages; i++){
+      mostraStato(`Lettura pagina ${i} di ${pdf.numPages} (OCR in corso)...`, 5 + (i - 1) * (85 / pdf.numPages));
+
+      const page = await pdf.getPage(i);
+      const scale = 300 / 72; // equivalente a ~300 DPI
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const { data } = await worker.recognize(canvas, {}, { tsv: true });
+      righe.push(...righeDaTsv(data.tsv));
+    }
+  } finally {
+    await worker.terminate();
+  }
+  return righe;
+}
+
+function righeDaTsv(tsv){
+  const linee = tsv.split('\n').slice(1); // salta intestazione
+  const parole = [];
+  for (const linea of linee){
+    if (!linea.trim()) continue;
+    const campi = linea.split('\t');
+    // colonne: level page_num block_num par_num line_num word_num left top width height conf text
+    if (campi.length < 12) continue;
+    const left = parseInt(campi[6], 10);
+    const top = parseInt(campi[7], 10);
+    const testo = campi[11].trim();
+    if (!testo) continue;
+    parole.push({ testo, x: left, y: -top }); // y invertita per usare la stessa funzione di raggruppamento (ordine decrescente = alto->basso)
+  }
+  return raggruppaInRighe(parole, 15);
+}
+
+function raggruppaInRighe(parole, tolleranza){
+  // Ordina dall'alto verso il basso (y decrescente per testo nativo, y crescente già gestito per OCR tramite -top)
+  const ordinate = [...parole].sort((a, b) => b.y - a.y || a.x - b.x);
+  const righe = [];
+  let corrente = [];
+  let yCorrente = null;
+  for (const p of ordinate){
+    if (yCorrente === null || Math.abs(p.y - yCorrente) <= tolleranza){
+      corrente.push(p);
+      if (yCorrente === null) yCorrente = p.y;
+    } else {
+      righe.push(corrente);
+      corrente = [p];
+      yCorrente = p.y;
+    }
+  }
+  if (corrente.length) righe.push(corrente);
+
+  return righe.map(riga => riga.sort((a, b) => a.x - b.x).map(p => p.testo).join(' '));
+}
+
+function estraiTabellaApprodi(righe){
+  const idxInizio = righe.findIndex(r => ANCORA_INIZIO.test(r));
+  if (idxInizio === -1){
+    throw new Error('Non ho trovato la sezione "List the last ten calls at port facilities" nel PDF. Verifica che sia il modulo ISPS atteso.');
+  }
+
+  const risultati = [];
+  for (let i = idxInizio + 1; i < righe.length; i++){
+    const riga = righe[i];
+    if (ANCORA_FINE.test(riga)) break;
+    if (risultati.length >= MAX_RIGHE) break;
+
+    const dateTrovate = [...riga.matchAll(DATE_REGEX)].map(m => m[1]);
+    if (dateTrovate.length < 2) continue;
+
+    const unlocodeMatch = riga.match(UNLOCODE_REGEX);
+    const slMatch = riga.match(SL_REGEX);
+    if (!unlocodeMatch || !slMatch) continue;
+
+    const dopoUnlocode = riga.slice(riga.indexOf(unlocodeMatch[0]) + unlocodeMatch[0].length);
+    const facilityMatch = dopoUnlocode.match(FACILITY_REGEX);
+    const facility = facilityMatch ? facilityMatch[1] : '0000';
+
+    risultati.push({
+      unlocode: unlocodeMatch[1],
+      arrivo: dateTrovate[0],
+      partenza: dateTrovate[1],
+      sl: slMatch[1],
+      facility,
+    });
+  }
+
+  if (!risultati.length){
+    throw new Error('Nessuna riga valida trovata nella tabella degli approdi.');
+  }
+  return risultati;
+}
+
+function formattaRiga(r){
+  return `${r.unlocode}:${r.arrivo}:${r.partenza}:${r.sl}:${r.facility}`;
+}
+
+function mostraRisultati(dati){
+  corpoTabella.innerHTML = '';
+  for (const r of dati){
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.unlocode}</td><td>${r.arrivo}</td><td>${r.partenza}</td><td>${r.sl}</td><td>${r.facility}</td>`;
+    corpoTabella.appendChild(tr);
+  }
+  badgeRighe.textContent = `${dati.length} righe estratte`;
+  testoFinale = dati.map(formattaRiga).join('\n') + '\n';
+  anteprimaTxt.value = testoFinale;
+  risultatoWrap.style.display = 'block';
+  risultatoWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function scaricaOCondividi(){
+  if (!testoFinale) return;
+  const nomeFileOut = nomeBase + '.txt';
+  const blob = new Blob([testoFinale], { type: 'text/plain' });
+
+  // Su iPhone/iOS il foglio di condivisione nativo è il modo più affidabile
+  if (navigator.canShare && navigator.canShare({ files: [new File([blob], nomeFileOut, { type: 'text/plain' })] })){
+    try {
+      await navigator.share({
+        files: [new File([blob], nomeFileOut, { type: 'text/plain' })],
+        title: nomeFileOut,
+      });
+      return;
+    } catch (err) {
+      // L'utente ha annullato la condivisione o non è supportata: si prosegue con il download classico
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeFileOut;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function copiaNegliAppunti(){
+  if (!testoFinale) return;
+  try {
+    await navigator.clipboard.writeText(testoFinale);
+    btnCopia.textContent = '✅ Copiato!';
+    setTimeout(() => { btnCopia.textContent = '📋 Copia negli appunti'; }, 1800);
+  } catch (err) {
+    anteprimaTxt.select();
+    document.execCommand('copy');
+  }
+}
+</script>
+
+</body>
+</html>
