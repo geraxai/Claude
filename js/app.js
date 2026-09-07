@@ -548,6 +548,10 @@
     return testo;
   }
 
+  function numeroRighe(testo) {
+    return testo.split('\n').filter(function (riga) { return riga.trim(); }).length;
+  }
+
   function scaricaFile() {
     var blob = new Blob([contenutoFile()], { type: 'text/plain;charset=utf-8' });
     var indirizzo = URL.createObjectURL(blob);
@@ -577,6 +581,10 @@
     function riuscito() {
       elementi.bottoneCopia.textContent = 'Copiato';
       window.setTimeout(function () { elementi.bottoneCopia.textContent = 'Copia il testo'; }, 1800);
+      // la scritta sul bottone dura poco: la conferma resta anche qui, dove
+      // compaiono gli altri messaggi di salvataggio
+      elementi.suggerimentoSalvataggio.textContent =
+        'Le ' + numeroRighe(testo) + ' righe sono state copiate: puoi incollarle nel PMIS.';
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(testo).then(riuscito, selezionaTesto);
