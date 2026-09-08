@@ -6,15 +6,22 @@ Si carica il PDF del modulo *Ship Pre-Arrival Security Information Form* (SOLAS 
 art. 6.3 Reg. CE 725/2004) e si ottiene un file di testo con una riga per approdo:
 
 ```
-UNLOCODE:data di arrivo:data di partenza:sl:port facility
+UNLOCODE;data di arrivo;data di partenza;SL;port facility
 ```
 
-Per esempio:
+Dieci approdi, dieci righe. Per esempio:
 
 ```
-MTMLA:28/08/2026:30/08/2026:1:MTMLA-0002
-GRPIR:24/08/2026:26/08/2026:1:GRPIR-0011
+MTMLA;28/07/2025;29/07/2025;SL1;0000
+EGDAM;19/07/2025;23/07/2025;SL1;0004
+TRALI;10/07/2025;17/07/2025;SL1;0002
 ```
+
+I campi sono separati dal punto e virgola, le date sono `gg/mm/aaaa`, il livello di
+sicurezza si scrive `SL1` (oppure `SL2`, `SL3`) e la port facility è il numero GISIS di
+quattro cifre, zeri compresi. Le righe seguono la tabella del modulo: stesso ordine,
+stessi porti (anche quando la nave torna più volte nello stesso porto) e date che si
+susseguono senza sovrapposizioni.
 
 Il file si scarica, si può modificare e si può salvare dove serve (anche su OneDrive di
 Microsoft 365). Il nome del PDF di partenza non conta: va bene qualunque file.
@@ -89,7 +96,8 @@ comuni, elencando sempre quello che ha cambiato.
 
 | Situazione sul modulo | Cosa fa l'app |
 | --- | --- |
-| UN/LOCODE inesistente o letto male (`MTM1A`, `UA0DS`) | lo corregge con il codice valido più vicino |
+| UN/LOCODE letto male (`MTM1A`, `UA0DS`) | lo corregge se il nome del porto o la port facility indicano lo stesso codice |
+| UN/LOCODE che non risulta nell'elenco UNECE | lo lascia com'è sul modulo e lo segnala: l'elenco ufficiale non contiene tutti i codici in uso |
 | UN/LOCODE della città invece del porto (`TRIST` per Ambarli) | confronta codice, nome del porto e codice della port facility e tiene il valore sostenuto da più indizi |
 | colonna UN/LOCODE vuota | ricava il codice dal nome del porto o dalla port facility |
 | nome del porto in italiano o storico (`Pireo`, `Leghorn`, `Genova`) | lo riconosce e usa il nome ufficiale UN/LOCODE |
@@ -101,15 +109,17 @@ comuni, elencando sempre quello che ha cambiato.
 | mese scritto a parole (`28 AUG 2026`, `28/ago/2026`) | lo riporta in cifre |
 | giorno inesistente (`31/04`) | lo riporta all'ultimo giorno del mese |
 | arrivo e partenza invertiti | scambia le due date |
+| approdi che si accavallano | tiene le date del modulo e segnala la riga: gli approdi devono essere consecutivi |
 | righe in ordine dal più vecchio al più recente | se ne accorge e mantiene la coerenza |
-| livello di sicurezza vuoto o illeggibile (`l`, `7`) | lo porta a 1, 2 o 3 e lo segnala |
-| port facility con spazi o sporcizia dell'OCR (`EGPSD 0007`) | la riscrive come `EGPSD-0007` |
-| codice della port facility di un altro porto | lo allinea all'UN/LOCODE della riga |
+| livello di sicurezza vuoto o illeggibile (`l`, `7`) | lo porta a `SL1`, `SL2` o `SL3` e lo segnala |
+| port facility scritta in qualunque modo (`EGPSD-0007`, `EGPSD 0007`, `7`) | la riduce al numero di quattro cifre (`0007`) |
+| port facility scritta solo col nome del terminal | lascia la casella vuota e chiede il numero: inventarlo sarebbe peggio |
+| codice della port facility di un altro porto | tiene il numero e segnala la differenza |
 | tabella che continua sulla pagina seguente | la legge per intero |
 | scansione entrata nello scanner coricata | riprova a leggerla girando la pagina |
 
-Le date, il formato della port facility e l'ordine delle righe si possono cambiare nel
-riquadro **Opzioni**.
+L'ordine delle righe si può cambiare nel riquadro **Opzioni**; il formato del file è
+quello richiesto dal PMIS e non si tocca.
 
 Il riconoscimento si appoggia all'elenco ufficiale UN/LOCODE dell'UNECE (oltre 17.000
 località portuali) incluso nell'app, quindi funziona anche senza rete.
@@ -177,7 +187,7 @@ Serve solo a chi mette mano al progetto (Python 3 e Node.js):
 python3 strumenti/genera_dati_porti.py   # riscarica l'elenco UN/LOCODE aggiornato
 python3 strumenti/crea_file_unico.py     # ricrea la versione a file unico
 python3 test/genera_pdf_prova.py         # ricrea i PDF di prova (reportlab, pillow, pypdfium2)
-node test/test_estrattore.mjs            # 112 verifiche automatiche
+node test/test_estrattore.mjs            # 139 verifiche automatiche
 npm install --no-save tesseract.js@5.1.1 && node test/test_ocr.mjs   # prova OCR
 ```
 

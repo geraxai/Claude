@@ -7,6 +7,7 @@ tabella degli ultimi dieci approdi.
 Vengono generati:
     test/pdf/modulo_pulito.pdf        dati corretti
     test/pdf/modulo_con_errori.pdf    con gli errori tipici da correggere
+    test/pdf/modulo_reale.pdf         tabella copiata da un modulo vero
     test/pdf/modulo_ordine_inverso.pdf  righe dal piu' vecchio al piu' recente
     test/pdf/modulo_righe_parziali.pdf   nave con soli quattro approdi
     test/pdf/modulo_due_pagine.pdf       tabella spezzata su due pagine
@@ -72,6 +73,29 @@ APPRODI_CON_ERRORI = [
     ("18/07/2026", "20/07/2026", "Genova", "Italy", "ITGOA", "ITGOA-0021", ""),
     ("10/07/2026", "12/07/2026", "Barcelonna", "Spain", "", "ESBCN-0009", "1"),
     ("05/07/2026", "02/07/2026", "Algeciras", "Spain", "ESALG", "ESALG-0012", "1"),
+]
+
+
+# Tabella copiata da un modulo vero (nave in Mediterraneo orientale, estate
+# 2025). Serve a verificare che il .txt rispecchi riga per riga la tabella del
+# PDF anche quando ci sono cose che i moduli inventati non hanno:
+#  - lo stesso porto toccato tre volte (Aliaga, righe 3, 6 e 10);
+#  - soste lunghe e approdi che si susseguono senza buchi;
+#  - una port facility scritta come solo numero (righe 4 e 9);
+#  - il numero 0000, che vale quanto gli altri e non va scambiato per "vuoto";
+#  - un UN/LOCODE (GRREU) che non risulta nell'elenco UNECE: l'app deve
+#    riportarlo com'e' invece di sostituirlo con uno che gli assomiglia.
+APPRODI_REALI = [
+    ("28/07/2025", "29/07/2025", "Valletta", "Malta", "MTMLA", "MTMLA-0000", "1"),
+    ("19/07/2025", "23/07/2025", "Damietta", "Egypt", "EGDAM", "EGDAM-0004", "1"),
+    ("10/07/2025", "17/07/2025", "Aliaga", "Turkey", "TRALI", "TRALI-0002", "1"),
+    ("06/07/2025", "08/07/2025", "Kalamaki", "Greece", "GRKLM", "0002", "1"),
+    ("01/07/2025", "02/07/2025", "Balchik", "Bulgaria", "BGBAL", "BGBAL-0001", "1"),
+    ("26/06/2025", "28/06/2025", "Aliaga", "Turkey", "TRALI", "TRALI-0002", "1"),
+    ("16/06/2025", "24/06/2025", "Constanta", "Romania", "ROCND", "ROCND-0106", "1"),
+    ("06/06/2025", "14/06/2025", "Gemlik", "Turkey", "TRGEM", "TRGEM-0001", "1"),
+    ("30/05/2025", "04/06/2025", "Aegean anchorage", "Greece", "GRREU", "0002", "1"),
+    ("22/05/2025", "29/05/2025", "Aliaga", "Turkey", "TRALI", "TRALI-0002", "1"),
 ]
 
 
@@ -257,6 +281,9 @@ def main():
     costruisci_modulo(
         CARTELLA / "modulo_righe_parziali.pdf",
         APPRODI_PULITI[:4] + [("", "", "", "", "", "", "")] * 6,
+    )
+    costruisci_modulo(
+        CARTELLA / "modulo_reale.pdf", APPRODI_REALI, eta="02/08/2025"
     )
     # tabella che comincia in fondo alla prima pagina e continua sulla seconda
     costruisci_modulo(

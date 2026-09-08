@@ -27,7 +27,9 @@
     <p>
       Carica il <em>Ship Pre-Arrival Security Information Form</em> in PDF: l'app legge la
       tabella degli ultimi dieci approdi, corregge gli errori evidenti e prepara il file di
-      testo nel formato <code>UNLOCODE:arrivo:partenza:livello:port&nbsp;facility</code>.
+      testo con una riga per approdo, nel formato
+      <code>UNLOCODE;arrivo;partenza;SL1;port&nbsp;facility</code>
+      (per esempio <code>MTMLA;28/07/2025;29/07/2025;SL1;0000</code>).
       Il PDF resta sul dispositivo, non viene inviato a nessun server.
     </p>
   </div>
@@ -90,23 +92,6 @@
   <details class="opzioni" id="riquadroOpzioni">
     <summary>Opzioni (di solito non servono)</summary>
     <div class="griglia-opzioni">
-      <label class="campo">
-        <span>Formato delle date</span>
-        <select id="opzioneFormatoData">
-          <option value="gg/mm/aaaa" selected>gg/mm/aaaa</option>
-          <option value="gg/mm/aa">gg/mm/aa</option>
-          <option value="aaaa-mm-gg">aaaa-mm-gg</option>
-          <option value="ggmmaaaa">ggmmaaaa</option>
-        </select>
-      </label>
-      <label class="campo">
-        <span>Port facility</span>
-        <select id="opzioneFormatoFacility">
-          <option value="originale" selected>Come sul modulo</option>
-          <option value="codice">Codice completo (ITCTA-0001)</option>
-          <option value="numero">Solo il numero (0001)</option>
-        </select>
-      </label>
       <label class="campo">
         <span>Ordine delle righe</span>
         <select id="opzioneOrdine">

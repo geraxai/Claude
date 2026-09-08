@@ -434,11 +434,7 @@
   }
 
   function opzioniCorrezione() {
-    return {
-      formatoData: elementi.opzioneFormatoData.value,
-      formatoFacility: elementi.opzioneFormatoFacility.value,
-      ordine: elementi.opzioneOrdine.value
-    };
+    return { ordine: elementi.opzioneOrdine.value };
   }
 
   var ultimoEstratto = null;
@@ -493,7 +489,7 @@
     { chiave: 'arrivo', etichetta: 'Arrivo', larghezza: false },
     { chiave: 'partenza', etichetta: 'Partenza', larghezza: false },
     { chiave: 'sl', etichetta: 'Livello', larghezza: false },
-    { chiave: 'facility', etichetta: 'Port facility', larghezza: true }
+    { chiave: 'facility', etichetta: 'Port facility (n.)', larghezza: false }
   ];
 
   function disegnaApprodi() {
@@ -575,7 +571,7 @@
       ['1', '2', '3'].forEach(function (valore) {
         var opzione = document.createElement('option');
         opzione.value = valore;
-        opzione.textContent = valore;
+        opzione.textContent = 'SL' + valore;
         if (riga.sl === valore) { opzione.selected = true; }
         controllo.appendChild(opzione);
       });
@@ -586,6 +582,12 @@
       controllo.autocapitalize = definizione.chiave === 'unlocode' ? 'characters' : 'off';
       controllo.autocomplete = 'off';
       controllo.spellcheck = false;
+      if (definizione.chiave === 'unlocode') { controllo.maxLength = 5; }
+      if (definizione.chiave === 'facility') {
+        controllo.inputMode = 'numeric';
+        controllo.maxLength = 4;
+        controllo.placeholder = '0000';
+      }
       if (!controllo.value) { controllo.classList.add('vuoto'); }
     }
 
@@ -600,7 +602,14 @@
       controllo.classList[valore ? 'remove' : 'add']('vuoto');
       aggiornaTesto(true);
     });
+    // a fine modifica il numero della port facility torna a quattro cifre,
+    // cosi' chi scrive "2" non si ritrova una riga che il PMIS rifiuta
     controllo.addEventListener('change', function () {
+      if (definizione.chiave === 'facility') {
+        var numero = controllo.value.replace(/[^0-9]/g, '');
+        while (numero && numero.length < 4) { numero = '0' + numero; }
+        controllo.value = numero;
+      }
       riga[definizione.chiave] = controllo.value;
       aggiornaTesto(true);
     });
@@ -624,7 +633,7 @@
       descrizione.textContent = riga.porto + ' \u00b7 ' + riga.nomePaese;
     } else {
       descrizione.textContent = codice
-        ? 'codice ' + codice + ' non presente nell\'elenco UN/LOCODE'
+        ? 'codice ' + codice + ' non presente nel mio elenco: lo scrivo com\'\u00e8'
         : 'porto da completare';
     }
   }
@@ -750,7 +759,7 @@
     elementi.bottoneCondividi.addEventListener('click', condividiFile);
     elementi.bottoneCopia.addEventListener('click', copiaTesto);
 
-    [elementi.opzioneFormatoData, elementi.opzioneFormatoFacility, elementi.opzioneOrdine]
+    [elementi.opzioneOrdine]
       .forEach(function (controllo) {
         controllo.addEventListener('change', function () {
           stato.testoModificatoAMano = false;
@@ -826,8 +835,8 @@
       'barraAvanzamento', 'erroreBox', 'riquadroRisultati', 'riepilogoEsito', 'elencoApprodi',
       'bottoneAggiungi', 'riquadroFile', 'testoFinale', 'avvisoModificaManuale',
       'bottoneRigenera', 'bottoneScarica', 'bottoneCondividi', 'bottoneCopia',
-      'suggerimentoSalvataggio', 'opzioneFormatoData', 'opzioneFormatoFacility',
-      'opzioneOrdine', 'pieDati', 'suggerimentoZona', 'bottoneOffline', 'statoOffline'
+      'suggerimentoSalvataggio', 'opzioneOrdine', 'pieDati', 'suggerimentoZona',
+      'bottoneOffline', 'statoOffline'
     ].forEach(function (id) { elementi[id] = elemento(id); });
 
     if (navigator.canShare) {
