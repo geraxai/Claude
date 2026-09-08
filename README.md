@@ -1,5 +1,7 @@
 # Ultimi dieci approdi ISPS → PMIS
 
+### 👉 <https://geraxai.github.io/Claude/>
+
 App per preparare l'inserimento nel **PMIS** degli ultimi dieci approdi di una nave.
 
 Si carica il PDF del modulo *Ship Pre-Arrival Security Information Form* (SOLAS XI‑2/9 e
@@ -40,7 +42,7 @@ Il PDF viene elaborato dentro il dispositivo e non viene inviato ad alcun server
 
 ### iPhone e iPad
 
-1. Aprire con Safari l'indirizzo dell'app (vedi *Pubblicare l'app* qui sotto).
+1. Aprire con Safari <https://geraxai.github.io/Claude/>.
 2. Toccare il pulsante di condivisione (il quadrato con la freccia) e poi
    **Aggiungi alla schermata Home**: compare un'icona come quella di una normale app.
 3. Da quel momento funziona anche senza rete e il PDF si può prendere da **File**,
@@ -53,7 +55,7 @@ Il PDF viene elaborato dentro il dispositivo e non viene inviato ad alcun server
 Due possibilità, entrambe senza installare programmi.
 
 **A. Dal browser (consigliata).**
-Aprire l'indirizzo dell'app con Edge o Chrome. Con *Impostazioni → Salva e condividi →
+Aprire <https://geraxai.github.io/Claude/> con Edge o Chrome. Con *Impostazioni → Salva e condividi →
 Aggiungi alla barra delle applicazioni* si ottiene un'icona sul desktop. Dopo la prima
 apertura funziona anche senza rete, scansioni comprese.
 
@@ -66,19 +68,20 @@ del testo che sta lì accanto e deve scaricarla al momento.
 
 ---
 
-## Pubblicare l'app (una volta sola)
+## L'indirizzo dell'app
 
-L'indirizzo si ottiene con GitHub Pages, senza costi:
+L'app è pubblicata con GitHub Pages, senza costi, a questo indirizzo:
 
-1. Su GitHub aprire questo repository → **Settings** → **Pages**.
-2. In *Build and deployment* scegliere **Deploy from a branch**, ramo `main`, cartella
-   `/ (root)`, quindi **Save**.
-3. Dopo un paio di minuti l'app è raggiungibile all'indirizzo indicato nella stessa
-   pagina, del tipo `https://geraxai.github.io/Claude/`.
+**<https://geraxai.github.io/Claude/>**
 
-Quell'indirizzo è quello da aprire sull'iPhone e sul PC. Se il repository resta privato
-GitHub Pages non è disponibile: in quel caso si può usare la versione a file unico
-(modalità B) oppure pubblicare la cartella su un altro spazio web dell'ufficio.
+È quello da aprire sull'iPhone e sul PC, e da mandare a chi deve usarla. Si aggiorna da
+solo a ogni modifica portata sul ramo `main`.
+
+La pubblicazione è già configurata (*Settings → Pages*, ramo `main`, cartella `/ (root)`).
+Va rifatta solo se si sposta il progetto in un altro repository; in quel caso l'indirizzo
+cambia di conseguenza. Se il repository venisse reso privato, GitHub Pages non sarebbe più
+disponibile: resterebbero la versione a file unico o la pubblicazione su un altro spazio
+web dell'ufficio.
 
 ---
 
