@@ -44,6 +44,7 @@
   var SCADENZA_PAGINA_OCR = 300000;
   var LATO_MASSIMO_OCR = 2600; // limite prudente per la memoria dell'iPhone
   var GIRI_OCR = [0, 90, 270, 180]; // orientamenti provati sulle scansioni coricate
+  var ATTESA_SERVICE_WORKER = 20000;
 
   var elementi = {};
   var stato = {
@@ -759,23 +760,51 @@
     }
   }
 
+  /* Il service worker viene registrato quando il resto e' arrivato, quindi
+     puo' non avere ancora il controllo della pagina: se si preme il comando
+     appena aperta l'app, conviene aspettarlo invece di dire che la funzione
+     non c'e'. */
+  function serviceWorkerAlComando() {
+    if (navigator.serviceWorker.controller) {
+      return Promise.resolve(navigator.serviceWorker.controller);
+    }
+    return new Promise(function (risolvi) {
+      var orologio = window.setTimeout(function () {
+        risolvi(navigator.serviceWorker.controller);
+      }, ATTESA_SERVICE_WORKER);
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        window.clearTimeout(orologio);
+        risolvi(navigator.serviceWorker.controller);
+      }, { once: true });
+    });
+  }
+
   /* Chiede al service worker di conservare anche i file dell'OCR. */
   function preparaUsoOffline() {
-    if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
+    if (!navigator.serviceWorker || window.location.protocol.indexOf('http') !== 0) {
       elementi.statoOffline.textContent =
         'Per questa funzione apri l\'app dal suo indirizzo internet (non come file locale) e riprova.';
       return;
     }
     elementi.bottoneOffline.disabled = true;
     elementi.statoOffline.textContent = 'Scaricamento in corso, tieni la pagina aperta\u2026';
-    var canale = new MessageChannel();
-    canale.port1.onmessage = function (evento) {
-      elementi.bottoneOffline.disabled = false;
-      elementi.statoOffline.textContent = evento.data && evento.data.esito === 'ok'
-        ? 'Pronta: adesso anche le scansioni si leggono senza collegamento a internet.'
-        : 'Scaricamento non riuscito: controlla il collegamento e riprova.';
-    };
-    navigator.serviceWorker.controller.postMessage({ tipo: 'prepara-offline' }, [canale.port2]);
+
+    serviceWorkerAlComando().then(function (controllore) {
+      if (!controllore) {
+        elementi.bottoneOffline.disabled = false;
+        elementi.statoOffline.textContent =
+          'Non riesco a preparare l\'uso senza rete: ricarica la pagina e riprova.';
+        return;
+      }
+      var canale = new MessageChannel();
+      canale.port1.onmessage = function (evento) {
+        elementi.bottoneOffline.disabled = false;
+        elementi.statoOffline.textContent = evento.data && evento.data.esito === 'ok'
+          ? 'Pronta: adesso anche le scansioni si leggono senza collegamento a internet.'
+          : 'Scaricamento non riuscito: controlla il collegamento e riprova.';
+      };
+      controllore.postMessage({ tipo: 'prepara-offline' }, [canale.port2]);
+    });
   }
 
   /* Chiamata due volte, perche' l'elenco dei porti e l'interfaccia possono

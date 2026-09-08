@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head><title>Auto-load Test</title></head>
+<body>
+<h1>Auto-loading PDF...</h1>
+<div id="status">Loading...</div>
+<script>
+// Load the main app.js and dependencies, then auto-trigger file loading
+(async function() {
+    const statusDiv = document.getElementById('status');
+    
+    try {
+        // Fetch the PDF
+        statusDiv.textContent = "Fetching PDF...";
+        const response = await fetch('/test/pdf/modulo_con_errori.pdf');
+        const blob = await response.blob();
+        const file = new File([blob], 'modulo_con_errori.pdf', {type: 'application/pdf'});
+        
+        statusDiv.textContent = `PDF loaded: ${file.name}, size: ${file.size} bytes. Redirecting to main app...`;
+        
+        // Redirect to main app with file in sessionStorage or trigger processing
+        // For now, just store and redirect
+        window.location.href = '/index.html';
+        
+    } catch (error) {
+        statusDiv.textContent = "Error: " + error.message;
+        console.error(error);
+    }
+})();
+</script>
+</body>
+</html>
