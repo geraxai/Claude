@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var VERSIONE = 'isps-pmis-2';
+var VERSIONE = 'isps-pmis-3';
 var DEPOSITO = VERSIONE;
 
 /* Quello che serve sempre: viene scaricato alla prima visita. */
@@ -39,7 +39,19 @@ var OCR = [
 self.addEventListener('install', function (evento) {
   evento.waitUntil(
     caches.open(DEPOSITO).then(function (deposito) {
-      return deposito.addAll(ESSENZIALE);
+      // 'reload' salta la copia che il browser tiene per conto suo: senza,
+      // subito dopo un aggiornamento il deposito nuovo rischia di riempirsi
+      // con i file vecchi ancora validi per la cache di rete, e l'app
+      // resterebbe indietro fino alla loro scadenza
+      var elenco;
+      try {
+        elenco = ESSENZIALE.map(function (indirizzo) {
+          return new Request(indirizzo, { cache: 'reload' });
+        });
+      } catch (senzaModoCache) {
+        elenco = ESSENZIALE;
+      }
+      return deposito.addAll(elenco);
     }).then(function () { return self.skipWaiting(); })
   );
 });

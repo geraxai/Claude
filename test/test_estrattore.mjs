@@ -322,6 +322,32 @@ function testLivelliEFacility() {
 
   confronta('livello scritto SL1 nel file', Correzioni.formattaLivello('1'), 'SL1');
   confronta('livello gia\' scritto SL2 non raddoppiato', Correzioni.formattaLivello('SL2'), 'SL2');
+  // la sigla SL e' obbligatoria nel PMIS: il campo non puo' mai uscire vuoto
+  confronta('livello mancante scritto comunque SL1', Correzioni.formattaLivello(''), 'SL1');
+  confronta('livello nullo scritto comunque SL1', Correzioni.formattaLivello(null), 'SL1');
+  confronta('livello fuori scala riportato a SL1', Correzioni.formattaLivello('5'), 'SL1');
+  confronta('livello scritto a mano in minuscolo', Correzioni.formattaLivello('sl3'), 'SL3');
+  confronta('livello con spazi', Correzioni.formattaLivello(' 2 '), 'SL2');
+
+  // il livello si scrive in tanti modi sul modulo: qualunque sia la grafia,
+  // la riga per il PMIS deve uscire con la sigla e il numero giusto
+  const grafie = {
+    'SL = 1': 'SL1', 'SL=2': 'SL2', 'SL 3': 'SL3', 'SL2': 'SL2', 'sl2': 'SL2',
+    'S L 2': 'SL2', '2': 'SL2', 'SL: 2': 'SL2', 'SL-2': 'SL2', '5L2': 'SL2',
+    'SLZ': 'SL2', 'SLI': 'SL1', '': 'SL1', 'SL': 'SL1', 'SL 4': 'SL1'
+  };
+  for (const grafia of Object.keys(grafie)) {
+    const testo = ('1 28/08/2026 30/08/2026 Valletta Malta MTMLA MTMLA-0002 ' + grafia).trim();
+    const parole = testo.split(' ').map((t, i) => ({
+      testo: t, x0: i * 10, x1: i * 10 + 8, y: 100, altezza: 8
+    }));
+    const letta = Estrattore.leggiRigaApprodo({ testo, parole, y: 100 });
+    const esito = Correzioni.correggi({ righe: [Object.assign({}, letta, { numero: 1 })] },
+      database, { oggi: OGGI });
+    confronta('livello scritto "' + grafia + '" sul modulo',
+      Correzioni.formattaRiga(esito.righe[0]),
+      'MTMLA;28/08/2026;30/08/2026;' + grafie[grafia] + ';0002');
+  }
 
   confronta('facility con spazio',
     Correzioni.correggiFacility({ facility: 'ITCTA 0001' }, 'ITCTA', note).facility, '0001');

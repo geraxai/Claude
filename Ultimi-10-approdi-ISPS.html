@@ -1439,7 +1439,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
     for (var i = parole.length - 1; i >= 0; i--) {
       var pulita = soloAlfanumerico(parole[i].testo);
       if (/^[S5][L1I]$/.test(pulita)) { return i; }
-      if (/^[S5][L1I][0-9]$/.test(pulita)) { return i; }
+      // "SL2" tutto attaccato, anche quando l'OCR legge la cifra come lettera
+      // (2 letto Z, 1 letto I): la cifra vera la ricava poi cifraLivello
+      if (/^[S5][L1I][0-9IZS]$/.test(pulita)) { return i; }
       if (/^[S5][L1I]?[=:]/.test(parole[i].testo.toUpperCase())) { return i; }
     }
     return -1;
@@ -1803,11 +1805,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
     return dueCifre(data.g) + '/' + dueCifre(data.m) + '/' + data.a;
   }
 
-  /* Il livello di sicurezza va scritto SL1, SL2 o SL3. */
+  /*
+   * Il livello di sicurezza nel PMIS si scrive sempre con la sigla davanti al
+   * numero: SL1, SL2 o SL3. Qui si accetta qualunque forma ("2", "SL2",
+   * "sl 2") e si tiene solo la cifra. Il campo non puo' restare vuoto, quindi
+   * se manca o non e' uno dei tre livelli si scrive SL1, che e' il livello
+   * ordinario: la riga viene comunque segnalata da correggiLivello.
+   */
   function formattaLivello(sl) {
-    var testo = String(sl == null ? '' : sl).trim().toUpperCase();
-    if (!testo) { return ''; }
-    return testo.indexOf('SL') === 0 ? testo : 'SL' + testo;
+    var cifra = String(sl == null ? '' : sl).replace(/[^123]/g, '').charAt(0);
+    return 'SL' + (cifra || '1');
   }
 
   /* Anni possibili per una cifra dell'anno letta male o incompleta. */
@@ -2703,6 +2710,59 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
 
   /* ------------------------------------------------------- lettura del PDF */
 
+  /* Che cosa e' stato scelto davvero? Sull'iPhone capita spesso di prendere la
+     foto del modulo, o l'allegato sbagliato, invece del PDF: meglio dirlo
+     subito e con parole chiare che lasciar fallire pdf.js in inglese.
+     Il "%PDF" non e' sempre il primo byte, quindi si cerca nell'intestazione. */
+  function tipoDiFile(dati) {
+    if (!dati || dati.length < 8) { return 'vuoto'; }
+    var limite = Math.min(dati.length - 3, 1024);
+    for (var i = 0; i < limite; i++) {
+      if (dati[i] === 0x25 && dati[i + 1] === 0x50 &&
+          dati[i + 2] === 0x44 && dati[i + 3] === 0x46) { return 'pdf'; }
+    }
+    if (dati[0] === 0xff && dati[1] === 0xd8) { return 'immagine'; }
+    if (dati[0] === 0x89 && dati[1] === 0x50 && dati[2] === 0x4e && dati[3] === 0x47) {
+      return 'immagine';
+    }
+    if (dati[4] === 0x66 && dati[5] === 0x74 && dati[6] === 0x79 && dati[7] === 0x70) {
+      return 'immagine'; // HEIC dell'iPhone, e i filmati
+    }
+    if (dati[0] === 0x50 && dati[1] === 0x4b) { return 'office'; }
+    if (dati[0] === 0xd0 && dati[1] === 0xcf) { return 'office'; }
+    return 'altro';
+  }
+
+  var SPIEGAZIONE_FILE = {
+    vuoto: 'Il file scelto è vuoto. Scaricalo di nuovo dalla mail e riprova.',
+    immagine: 'Hai scelto un\'immagine, non un PDF. L\'app legge il PDF del modulo: se ' +
+      'hai solo una foto o una scansione salvata come immagine, convertila prima in PDF ' +
+      '(sull\'iPhone si può fare da File, con Stampa e poi Salva come PDF).',
+    office: 'Hai scelto un documento Word, Excel o un file compresso, non un PDF. ' +
+      'Apri il modulo e salvalo come PDF, poi carica quello.',
+    altro: 'Questo file non è un PDF. Scegli il PDF del modulo Ship Pre-Arrival ' +
+      'Security Information Form.'
+  };
+
+  /* pdf.js segnala i guai con eccezioni dal nome inglese: qui diventano frasi
+     che dicono anche che cosa fare. */
+  function erroreApertura(errore) {
+    var nome = (errore && errore.name) || '';
+    if (nome === 'PasswordException') {
+      return new Error('Questo PDF è protetto da password. Aprilo inserendo la password, ' +
+        'salvane una copia senza protezione e carica quella.');
+    }
+    if (nome === 'InvalidPDFException') {
+      return new Error('Questo PDF è danneggiato o è stato scaricato a metà. Scaricalo ' +
+        'di nuovo dalla mail e riprova.');
+    }
+    if (nome === 'MissingPDFException' || nome === 'UnexpectedResponseException') {
+      return new Error('Non riesco a leggere il file. Copialo sul dispositivo e ' +
+        'scegli di nuovo il file copiato.');
+    }
+    return errore;
+  }
+
   function apriDocumento(datiPdf) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = RADICE + 'vendor/pdfjs/pdf.worker.min.js';
     var opzioni = {
@@ -2717,7 +2777,9 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
       // ormai in memoria del browser
       workerPdf = null;
     }
-    return pdfjsLib.getDocument(opzioni).promise;
+    return pdfjsLib.getDocument(opzioni).promise.catch(function (errore) {
+      throw erroreApertura(errore);
+    });
   }
 
   /* Il PDF ha davvero un livello di testo? Se no si passa all'OCR. */
@@ -2946,7 +3008,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
        correzione, in fondo, e nel frattempo finisce di arrivare da se'. Anche
        la lettura del file dal disco procede in parallelo. */
     Promise.all([leggiFile(file), attesa(pdfPronto, 'il lettore di PDF')])
-      .then(function (esiti) { return apriDocumento(new Uint8Array(esiti[0])); })
+      .then(function (esiti) {
+        var dati = new Uint8Array(esiti[0]);
+        var tipo = tipoDiFile(dati);
+        if (tipo !== 'pdf') { throw new Error(SPIEGAZIONE_FILE[tipo]); }
+        return apriDocumento(dati);
+      })
       .then(function (documento) {
         return leggiTestoNativo(documento).then(function (pagine) {
           if (self.EstrattoreIsps.testoUtilizzabile(pagine)) { return pagine; }
