@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var VERSIONE = 'isps-pmis-3';
+var VERSIONE = 'isps-pmis-4';
 var DEPOSITO = VERSIONE;
 
 /* Quello che serve sempre: viene scaricato alla prima visita. */
@@ -84,13 +84,22 @@ self.addEventListener('fetch', function (evento) {
   var indirizzo = new URL(richiesta.url);
   if (indirizzo.origin !== self.location.origin) { return; }
 
+  /*
+   * La pagina esce dal deposito, non dalla rete, cosi' l'HTML e i file
+   * JavaScript arrivano sempre dalla stessa versione dell'app: quando il
+   * service worker si aggiorna li sostituisce tutti insieme e al ricaricamento
+   * successivo la pagina e' quella nuova. Prendendo invece l'HTML dalla rete e
+   * il resto dal deposito poteva capitare la pagina nuova con il codice
+   * vecchio: cercava un pezzo di pagina che non c'era piu' e l'app si fermava
+   * con "Cannot read properties of null".
+   */
   if (richiesta.mode === 'navigate') {
     evento.respondWith(
-      fetch(richiesta).catch(function () {
-        return caches.match('index.html').then(function (salvata) {
-          return salvata || caches.match('./');
-        });
-      })
+      caches.open(DEPOSITO).then(function (deposito) {
+        return deposito.match('index.html');
+      }).then(function (salvata) {
+        return salvata || fetch(richiesta);
+      }).catch(function () { return fetch(richiesta); })
     );
     return;
   }

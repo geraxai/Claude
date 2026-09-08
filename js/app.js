@@ -493,8 +493,11 @@
     });
   }
 
+  /* Le opzioni sono un di piu': se il riquadro non c'e' (versione a file unico,
+     o pagina e codice rimasti disallineati in memoria del browser) si lavora
+     con i valori normali invece di fermare tutto con un errore. */
   function opzioniCorrezione() {
-    return { ordine: elementi.opzioneOrdine.value };
+    return { ordine: elementi.opzioneOrdine ? elementi.opzioneOrdine.value : 'pdf' };
   }
 
   var ultimoEstratto = null;
