@@ -336,12 +336,29 @@
     return null;
   }
 
-  /* Una riga della tabella e' interessante se contiene almeno una data
-     oppure un livello di sicurezza ("SL =") oppure un UN/LOCODE. */
+  /*
+   * Una riga della tabella e' un approdo se contiene almeno una data. Senza
+   * date vale solo se porta un UN/LOCODE vero: il solo "SL = 1" non basta,
+   * perche' nel modulo sta in mezzo alla cella e scivola sulla riga sotto
+   * quando il nome del porto va a capo ("ZONA" e sotto "COMUN"). Prendendolo
+   * per buono nasceva un approdo inesistente, senza date, e tutta la tabella
+   * si spostava di una riga.
+   */
   function rigaSembraApprodo(riga) {
     var testo = riga.testo;
     if (trovaDate(testo).length >= 1) { return true; }
-    if (/\bS\s*[L1I]\s*[=:]/i.test(testo)) { return true; }
+    if (!/\bS\s*[L1I]\s*[=:]/i.test(testo)) { return false; }
+    return contieneLocodeValido(riga.parole);
+  }
+
+  function contieneLocodeValido(parole) {
+    if (!validatoreLocode) { return false; }
+    for (var i = 0; i < parole.length; i++) {
+      var pulita = soloAlfanumerico(parole[i].testo);
+      if (pulita.length === 5 && REGEX_LOCODE.test(pulita) && validatoreLocode(pulita)) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -735,6 +752,7 @@
     estraiDaParole: estraiDaParole,
     impostaRiconoscitorePaese: impostaRiconoscitorePaese,
     impostaValidatoreLocode: impostaValidatoreLocode,
+    rigaSembraApprodo: rigaSembraApprodo,
     separaCoda: separaCoda
   };
 

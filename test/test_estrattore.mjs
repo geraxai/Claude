@@ -360,6 +360,33 @@ function testLivelliEFacility() {
   confronta('facility con codice di un altro porto: tenuto il numero',
     Correzioni.correggiFacility({ facility: 'ITAUG-0003' }, 'ITCTA', note).facility, '0003');
 
+  // Nave all'ancora: sul modulo la port facility non c'e' e il PMIS vuole 0000
+  confronta('nessuna port facility: "NO PFN(anchorage)"',
+    Correzioni.correggiFacility({ facility: 'NO PFN(anchorage)' }, 'ARBUE', note).facility, '0000');
+  confronta('nessuna port facility: "N/A"',
+    Correzioni.correggiFacility({ facility: 'N/A' }, 'ARBUE', note).facility, '0000');
+  confronta('nessuna port facility: "none"',
+    Correzioni.correggiFacility({ facility: 'none' }, 'ARBUE', note).facility, '0000');
+  confronta('nessuna port facility: "at anchor"',
+    Correzioni.correggiFacility({ facility: 'at anchor' }, 'ARBUE', note).facility, '0000');
+  confronta('negazione riconosciuta anche con parole attaccate dall\'OCR',
+    Correzioni.correggiFacility({ facility: 'NO PFN(anchorage) COMUN' }, 'ARBUE', note).facility, '0000');
+  // ma un terminal che si chiama cosi' non e' un ancoraggio
+  confronta('"Anchorage Terminal" non e\' un ancoraggio',
+    Correzioni.correggiFacility({ facility: 'Anchorage Terminal' }, 'USANC', note).facility, '');
+
+  // celle sporcate dalle caselle vicine: il numero GISIS ha quattro cifre
+  confronta('numero recuperato da cella sporca (coda di un\'altra colonna)',
+    Correzioni.correggiFacility({ facility: '0004 3 ZONA SL1' }, 'GIGIB', note).facility, '0004');
+  confronta('numero recuperato con il nome della banchina accanto',
+    Correzioni.correggiFacility({ facility: '0091 2 Shed' }, 'ARSLO', note).facility, '0091');
+  confronta('numero recuperato con il livello di sicurezza accanto',
+    Correzioni.correggiFacility({ facility: '0014 SL=1' }, 'ITRAN', note).facility, '0014');
+  confronta('una data accanto al numero non confonde',
+    Correzioni.correggiFacility({ facility: '01/08/2026 0037' }, 'ARSLO', note).facility, '0037');
+  confronta('due numeri possibili: non si tira a indovinare',
+    Correzioni.correggiFacility({ facility: '0002 0106' }, 'ITCTA', note).facility, '');
+
   const noteDescrittiva = [];
   confronta('facility descrittiva: numero da chiedere',
     Correzioni.correggiFacility({ facility: 'Terminal Rada San Filippo' }, 'ITCTA', noteDescrittiva).facility, '');
@@ -389,9 +416,67 @@ function testCodiciFuoriElenco() {
   verifica('la correzione e\' spiegata', conProve.join(' ').indexOf('MTM1A') >= 0, conProve.join(' '));
 }
 
+/*
+ * Su una scansione le colonne si spostano e nella casella del porto finisce
+ * altro. Una somiglianza che salta in un altro paese e' quasi sempre un
+ * abbaglio: su un modulo vero "ZONA COMUN" (Argentina) diventava Iona, in
+ * Canada, e "ARGENTINA" diventava Argentia, sempre in Canada.
+ */
+function testPortoFuoriPaese() {
+  console.log('\nPorti scelti secondo il contesto della riga');
+  function scegli(porto, paese, unlocode, facility) {
+    const note = [];
+    const esito = Correzioni.correggiPorto(
+      { unlocode: unlocode || '', porto: porto, paese: paese, facility: facility || '' },
+      database, note
+    );
+    return esito;
+  }
+
+  confronta('nome di paese nella casella del porto non diventa un porto canadese',
+    scegli('ARGENTINA', 'ARGENTINA').unlocode, '');
+  confronta('nome di paese senza paese indicato: stesso trattamento',
+    scegli('ARGENTINA', '').unlocode, '');
+  confronta('porto sconosciuto non salta in un altro continente',
+    scegli('ZONA COMUN', 'ARGENTINA').unlocode, '');
+  confronta('con il codice sul modulo la riga si risolve lo stesso',
+    scegli('ZONA COMUN', 'ARGENTINA', 'ARBUE').unlocode, 'ARBUE');
+
+  // i porti che si chiamano come il loro paese corrispondono in modo esatto,
+  // non somigliante, quindi non vengono toccati
+  confronta('Singapore resta Singapore', scegli('SINGAPORE', 'SINGAPORE').unlocode, 'SGSIN');
+  confronta('Gibuti resta Gibuti', scegli('DJIBOUTI', 'DJIBOUTI').unlocode, 'DJJIB');
+  confronta('Gibilterra col paese sbagliato sul modulo', scegli('GIBRALTAR', 'UK').unlocode, 'GIGIB');
+  // un errore di battitura dentro il paese giusto si corregge ancora
+  confronta('errore di battitura nel paese giusto', scegli('RAVENA', 'ITALY').unlocode, 'ITRAN');
+}
+
+/* Il nome del porto che va a capo ("ZONA" e sotto "COMUN") si porta dietro il
+   livello di sicurezza, che sul modulo sta in mezzo alla cella: quella riga
+   non e' un approdo e non deve diventarlo. */
+function testRigaDiContinuazione() {
+  console.log('\nRighe di continuazione');
+  function riga(testo) {
+    const parole = testo.split(' ').map((t, i) => ({
+      testo: t, x0: i * 10, x1: i * 10 + 8, y: 100, altezza: 8
+    }));
+    return { testo, parole, y: 100 };
+  }
+  verifica('"COMUN SL = 1" non e\' un approdo',
+    Estrattore.rigaSembraApprodo(riga('COMUN SL = 1')) === false, 'riconosciuta come approdo');
+  verifica('una riga con le date resta un approdo',
+    Estrattore.rigaSembraApprodo(riga('1 28/08/2026 30/08/2026 Valletta Malta MTMLA')) === true,
+    'non riconosciuta');
+  verifica('senza date ma con un UN/LOCODE vero resta un approdo',
+    Estrattore.rigaSembraApprodo(riga('Valletta Malta MTMLA MTMLA-0002 SL = 1')) === true,
+    'non riconosciuta');
+}
+
 (async function eseguiTest() {
   console.log('Test estrattore ISPS -> PMIS');
   testDatabase();
+  testPortoFuoriPaese();
+  testRigaDiContinuazione();
   testLetturaRiga();
   testDiagnostica();
   testDate();

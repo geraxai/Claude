@@ -384,6 +384,24 @@
   var PRIORITA = { codice: 3, nome: 2, facility: 1 };
 
   /*
+   * Un nome di porto che somiglia soltanto va preso con le pinze: su una
+   * scansione le colonne si spostano e nella casella del porto finisce altro.
+   * Due somiglianze non valgono nulla e vanno buttate via:
+   *  - quella che porta in un paese diverso da quello scritto sulla riga
+   *    ("ZONA COMUN", Argentina, diventerebbe Iona, in Canada);
+   *  - quella che parte dal nome di un paese finito nella casella sbagliata
+   *    ("ARGENTINA" diventerebbe Argentia, sempre in Canada).
+   * I porti che portano il nome del loro paese (Singapore, Gibuti, Gibilterra)
+   * hanno una corrispondenza esatta, non somigliante, quindi restano.
+   */
+  function nomeAttendibile(trovato, nomeScritto, database) {
+    if (!trovato || trovato.distanza === 0) { return trovato; }
+    if (trovato.fuoriPaese) { return null; }
+    if (database.paeseDaNome(nomeScritto)) { return null; }
+    return trovato;
+  }
+
+  /*
    * Decide l'UN/LOCODE confrontando tre indizi: il codice scritto sul modulo,
    * il nome del porto e il prefisso del codice della port facility.
    * Vince l'indizio con il peso complessivo maggiore; a pari peso vale il
@@ -397,7 +415,8 @@
 
     var lettoDalPdf = pulisciLocode(riga.unlocode);
     var scritto = raddrizzaLocode(lettoDalPdf);
-    var perNome = riga.porto ? database.cercaPerNome(riga.porto, paeseIso) : null;
+    var perNome = nomeAttendibile(
+      riga.porto ? database.cercaPerNome(riga.porto, paeseIso) : null, riga.porto, database);
     var daFacility = locodeDaFacility(riga.facility);
     var indizi = [];
     var fuoriElenco = null;
@@ -559,6 +578,36 @@
   }
 
   /*
+   * Parole con cui il modulo dice che una port facility non c'e' proprio:
+   * "NO PFN(anchorage)", "N/A", "none", "at anchor", "OPL".
+   * Non basta trovarne una: dev'esserci solo roba di questa lista, altrimenti
+   * un terminal che si chiama "Terminal Rada San Filippo" o "Anchorage
+   * Terminal" verrebbe scambiato per un ancoraggio.
+   */
+  // Negazioni esplicite: nessun terminal si chiama cosi', quindi basta
+  // trovarle per sapere che la port facility non c'e'. Restano valide anche
+  // se l'OCR ha appiccicato alla cella qualche parola della riga di sopra.
+  var NEGAZIONE_FACILITY = /\b(NO\s*PFN?|N\s*[\/.]\s*A|NOT\s+(APPLICABLE|AVAILABLE)|NONE|NIL)\b/i;
+
+  // Parole che dicono "la nave stava all'ancora": valgono solo se la cella non
+  // contiene altro, se no "Anchorage Terminal" verrebbe scambiato per un
+  // ancoraggio.
+  var PAROLE_ANCORAGGIO = {
+    ANCHORAGE: 1, ANCHORING: 1, ANCHOR: 1, ANCH: 1, AT: 1, IN: 1, THE: 1,
+    OPL: 1, ROADS: 1, ROADSTEAD: 1, OFFSHORE: 1
+  };
+
+  function nessunaFacility(testo) {
+    if (NEGAZIONE_FACILITY.test(testo)) { return true; }
+    var parole = String(testo).toUpperCase().split(/[^A-Z]+/).filter(Boolean);
+    if (!parole.length) { return false; }
+    for (var i = 0; i < parole.length; i++) {
+      if (!PAROLE_ANCORAGGIO[parole[i]]) { return false; }
+    }
+    return true;
+  }
+
+  /*
    * Nel PMIS la port facility e' il numero GISIS di quattro cifre (0002, 0106).
    * Sul modulo puo' essere scritta come "ITCTA-0002", "IT CTA 0002", "2" o
    * come nome del terminal: nell'ultimo caso il numero non c'e' e va chiesto
@@ -600,6 +649,31 @@
         numero = dentro[1];
         ripulita = true;
       }
+    }
+
+    // Sulle scansioni la cella si porta dietro pezzi delle caselle vicine
+    // ("0004 3 ZONA SL1", "0091 2 Shed", "0014 SL=1"). Il numero GISIS sul
+    // modulo e' sempre di quattro cifre: se, tolte le date e il livello di
+    // sicurezza, di gruppi da quattro cifre ne resta uno solo, quello e'.
+    if (!numero) {
+      var ripulito = testo
+        .replace(/\d{1,2}\s*[\/.\-]\s*\d{1,2}\s*[\/.\-]\s*\d{2,4}/g, ' ')
+        .replace(/\b(19|20)\d{2}\b/g, ' ')
+        .replace(/\bS\s*[L1I]\s*[=:]?\s*\d?/gi, ' ');
+      var gruppi = ripulito.match(/\d{4}(?!\d)/g);
+      if (gruppi && gruppi.length === 1) {
+        numero = gruppi[0];
+        ripulita = true;
+      }
+    }
+
+    // Quando la nave sta all'ancora, in rada o fuori dai limiti del porto non
+    // c'e' nessuna port facility: il modulo lo scrive a parole ("NO PFN
+    // (anchorage)", "N/A", "none") e per il PMIS quel caso vale 0000.
+    if (!numero && nessunaFacility(testo)) {
+      note.push('Nella colonna port facility c\'e\' scritto "' + testo + '": nessuna port ' +
+        'facility, la nave era all\'ancora, quindi ho scritto 0000.');
+      return { facility: '0000', numero: '0000', sicuro: true };
     }
 
     if (!numero) {

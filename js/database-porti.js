@@ -314,48 +314,45 @@
     var k = chiave(nomePorto);
     if (k.length < 2) { return null; }
     var iso = paeseIso ? String(paeseIso).toUpperCase() : null;
-    var esatti = this.filtraPerPaese(this.codiciPerNome[k], iso);
-    if (esatti && esatti.length) {
-      return {
-        codice: esatti[0],
-        nome: this.nomePerCodice[esatti[0]],
-        distanza: 0,
-        ambiguo: esatti.length > 1
-      };
-    }
     // senza parole generiche ("PORT OF X" -> "X")
     var ridotto = normalizza(nomePorto).split(' ').filter(function (p) {
       return !PAROLE_INUTILI.test(p);
     }).join('');
-    if (ridotto && ridotto !== k) {
-      var perRidotto = this.filtraPerPaese(this.codiciPerNome[ridotto], iso);
-      if (perRidotto && perRidotto.length) {
+    if (ridotto === k) { ridotto = null; }
+
+    /* Il paese scritto sulla riga e' un indizio forte: si esaurisce prima
+       tutto quello che c'e' dentro quel paese, anche solo somigliante, e solo
+       dopo si esce dai suoi confini. Altrimenti "Ravena", che esiste davvero
+       negli Stati Uniti, batterebbe "Ravenna" pur avendo l'Italia scritta
+       nella casella accanto. */
+    if (iso) {
+      var dentro = this.nomeEsatto(k, ridotto, iso) || this.scansioneApprossimata(k, iso);
+      if (dentro) { return dentro; }
+    }
+    var fuori = this.nomeEsatto(k, ridotto, null) || this.scansioneApprossimata(k, null);
+    if (fuori && iso && fuori.codice.slice(0, 2) !== iso) { fuori.fuoriPaese = true; }
+    return fuori;
+  };
+
+  /* Corrispondenza esatta del nome (o del nome senza le parole generiche),
+     limitata al paese quando indicato. */
+  DatabasePorti.prototype.nomeEsatto = function (k, ridotto, iso) {
+    var chiavi = ridotto ? [k, ridotto] : [k];
+    for (var i = 0; i < chiavi.length; i++) {
+      var codici = this.codiciPerNome[chiavi[i]];
+      if (codici && iso) {
+        codici = codici.filter(function (c) { return c.slice(0, 2) === iso; });
+      }
+      if (codici && codici.length) {
         return {
-          codice: perRidotto[0],
-          nome: this.nomePerCodice[perRidotto[0]],
+          codice: codici[0],
+          nome: this.nomePerCodice[codici[0]],
           distanza: 0,
-          ambiguo: perRidotto.length > 1
+          ambiguo: codici.length > 1
         };
       }
     }
-    return this.cercaApprossimata(k, iso);
-  };
-
-  DatabasePorti.prototype.filtraPerPaese = function (codici, iso) {
-    if (!codici || !codici.length) { return null; }
-    if (!iso) { return codici; }
-    var filtrati = codici.filter(function (c) { return c.slice(0, 2) === iso; });
-    return filtrati.length ? filtrati : codici;
-  };
-
-  /* Prima cerca dentro il paese indicato; se non trova nulla ripete la
-     ricerca su tutto il mondo (il paese sul modulo puo' essere sbagliato). */
-  DatabasePorti.prototype.cercaApprossimata = function (k, iso) {
-    if (iso) {
-      var dentroPaese = this.scansioneApprossimata(k, iso);
-      if (dentroPaese) { return dentroPaese; }
-    }
-    return this.scansioneApprossimata(k, null);
+    return null;
   };
 
   DatabasePorti.prototype.scansioneApprossimata = function (k, iso) {
