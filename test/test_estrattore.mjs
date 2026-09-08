@@ -57,16 +57,31 @@ async function elabora(nomeFile, opzioni) {
 }
 
 const ATTESO_PULITO = [
-  'MTMLA:28/08/2026:30/08/2026:1:MTMLA-0002',
-  'GRPIR:24/08/2026:26/08/2026:1:GRPIR-0011',
-  'TRAMB:18/08/2026:20/08/2026:1:TRAMB-0005',
-  'ROCND:12/08/2026:14/08/2026:2:ROCND-0003',
-  'UAODS:06/08/2026:08/08/2026:2:UAODS-0001',
-  'EGALY:30/07/2026:01/08/2026:1:EGALY-0004',
-  'EGPSD:24/07/2026:26/07/2026:1:EGPSD-0007',
-  'ITGOA:18/07/2026:20/07/2026:1:ITGOA-0021',
-  'ESBCN:10/07/2026:12/07/2026:1:ESBCN-0009',
-  'ESALG:02/07/2026:05/07/2026:1:ESALG-0012'
+  'MTMLA;28/08/2026;30/08/2026;SL1;0002',
+  'GRPIR;24/08/2026;26/08/2026;SL1;0011',
+  'TRAMB;18/08/2026;20/08/2026;SL1;0005',
+  'ROCND;12/08/2026;14/08/2026;SL2;0003',
+  'UAODS;06/08/2026;08/08/2026;SL2;0001',
+  'EGALY;30/07/2026;01/08/2026;SL1;0004',
+  'EGPSD;24/07/2026;26/07/2026;SL1;0007',
+  'ITGOA;18/07/2026;20/07/2026;SL1;0021',
+  'ESBCN;10/07/2026;12/07/2026;SL1;0009',
+  'ESALG;02/07/2026;05/07/2026;SL1;0012'
+];
+
+/* La tabella del modulo vero: dieci righe, tre volte lo stesso porto e un
+   codice che non risulta nell'elenco UNECE. */
+const ATTESO_REALE = [
+  'MTMLA;28/07/2025;29/07/2025;SL1;0000',
+  'EGDAM;19/07/2025;23/07/2025;SL1;0004',
+  'TRALI;10/07/2025;17/07/2025;SL1;0002',
+  'GRKLM;06/07/2025;08/07/2025;SL1;0002',
+  'BGBAL;01/07/2025;02/07/2025;SL1;0001',
+  'TRALI;26/06/2025;28/06/2025;SL1;0002',
+  'ROCND;16/06/2025;24/06/2025;SL1;0106',
+  'TRGEM;06/06/2025;14/06/2025;SL1;0001',
+  'GRREU;30/05/2025;04/06/2025;SL1;0002',
+  'TRALI;22/05/2025;29/05/2025;SL1;0002'
 ];
 
 async function testModuloPulito() {
@@ -146,16 +161,63 @@ async function testTabellaSuDuePagine() {
   }
 }
 
+/*
+ * Il caso che conta davvero: il .txt deve rispecchiare la tabella del PDF
+ * riga per riga, senza saltare i porti ripetuti e senza sostituire i codici
+ * che non risultano nell'elenco UN/LOCODE.
+ */
+async function testModuloReale() {
+  console.log('\nTabella copiata da un modulo vero');
+  const { esito } = await elabora('modulo_reale.pdf');
+  confronta('dieci approdi estratti', esito.righe.length, 10);
+  const testo = Correzioni.formattaTesto(esito.righe);
+  const righe = testo.trim().split('\n');
+  confronta('dieci righe nel file', righe.length, 10);
+  for (let i = 0; i < ATTESO_REALE.length; i++) {
+    confronta('riga ' + (i + 1), righe[i], ATTESO_REALE[i]);
+  }
+  confronta('lo stesso porto toccato tre volte',
+    esito.righe.filter((r) => r.unlocode === 'TRALI').length, 3);
+  verifica('port facility 0000 tenuta com\'e\'', esito.righe[0].facility === '0000',
+    esito.righe[0].facility);
+  verifica('codice fuori elenco lasciato sul suo posto',
+    esito.righe[8].unlocode === 'GRREU', esito.righe[8].unlocode);
+  verifica('codice fuori elenco segnalato',
+    esito.righe[8].note.join(' ').indexOf('GRREU') >= 0, esito.righe[8].note.join(' '));
+
+  const altreNote = esito.righe.filter((r, i) => i !== 8 && r.note.length);
+  verifica('nessun\'altra riga da verificare', altreNote.length === 0,
+    altreNote.map((r) => r.unlocode + ': ' + r.note.join(' ')).join('\n       '));
+}
+
+/* Gli approdi devono incastrarsi: niente sovrapposizioni fra una riga e la
+   successiva, e la partenza non puo' venire prima dell'arrivo. */
+function testConsecutivita() {
+  console.log('\nApprodi consecutivi');
+  const finto = {
+    righe: [
+      { numero: 1, arrivo: '28/08/2026', partenza: '30/08/2026', porto: 'Valletta', paese: 'Malta', unlocode: 'MTMLA', facility: '0002', sl: '1' },
+      { numero: 2, arrivo: '20/08/2026', partenza: '29/08/2026', porto: 'Piraeus', paese: 'Greece', unlocode: 'GRPIR', facility: '0011', sl: '1' },
+      { numero: 3, arrivo: '10/08/2026', partenza: '12/08/2026', porto: 'Ambarli', paese: 'Turkey', unlocode: 'TRAMB', facility: '0005', sl: '1' }
+    ]
+  };
+  const esito = Correzioni.correggi(finto, database, { oggi: OGGI });
+  verifica('sovrapposizione segnalata, con il numero dell\'altro approdo',
+    esito.righe[0].note.join(' ').indexOf('sovrappone all\'approdo n. 2') >= 0,
+    esito.righe[0].note.join(' '));
+  confronta('le date restano quelle del modulo', Correzioni.formattaRiga(esito.righe[1]),
+    'GRPIR;20/08/2026;29/08/2026;SL1;0011');
+  verifica('le righe in fila non sono segnalate',
+    esito.righe[1].note.length === 0 && esito.righe[2].note.length === 0,
+    esito.righe[1].note.concat(esito.righe[2].note).join(' '));
+}
+
 async function testOpzioni() {
-  console.log('\nOpzioni di formato');
-  const conData = await elabora('modulo_pulito.pdf', { formatoData: 'aaaa-mm-gg' });
-  confronta('data in formato aaaa-mm-gg', Correzioni.formattaRiga(conData.esito.righe[0]),
-    'MTMLA:2026-08-28:2026-08-30:1:MTMLA-0002');
-  const conNumero = await elabora('modulo_pulito.pdf', { formatoFacility: 'numero' });
-  confronta('port facility come solo numero', Correzioni.formattaRiga(conNumero.esito.righe[0]),
-    'MTMLA:28/08/2026:30/08/2026:1:0002');
+  console.log('\nOpzioni');
   const invertito = await elabora('modulo_pulito.pdf', { ordine: 'vecchio' });
   confronta('ordine dal piu\' vecchio', invertito.esito.righe[0].unlocode, 'ESALG');
+  confronta('ordine dal piu\' recente',
+    (await elabora('modulo_pulito.pdf', { ordine: 'recente' })).esito.righe[0].unlocode, 'MTMLA');
 }
 
 function testDatabase() {
@@ -258,21 +320,47 @@ function testLivelliEFacility() {
   confronta('livello valido', Correzioni.correggiLivello({ sl: '3' }, note).sl, '3');
   confronta('livello assente', Correzioni.correggiLivello({ sl: '' }, note).sl, '1');
 
+  confronta('livello scritto SL1 nel file', Correzioni.formattaLivello('1'), 'SL1');
+  confronta('livello gia\' scritto SL2 non raddoppiato', Correzioni.formattaLivello('SL2'), 'SL2');
+
   confronta('facility con spazio',
-    Correzioni.correggiFacility({ facility: 'ITCTA 0001' }, 'ITCTA', 'originale', note).facility, 'ITCTA-0001');
-  confronta('facility con codice sbagliato allineata all\'UN/LOCODE',
-    Correzioni.correggiFacility({ facility: 'ITAUG-0003' }, 'ITCTA', 'originale', note).facility, 'ITCTA-0003');
-  confronta('facility descrittiva lasciata come e\'',
-    Correzioni.correggiFacility({ facility: 'Terminal Rada San Filippo' }, 'ITCTA', 'originale', note).facility,
-    'Terminal Rada San Filippo');
-  confronta('facility come codice completo',
-    Correzioni.correggiFacility({ facility: '12' }, 'ITCTA', 'codice', note).facility, 'ITCTA-0012');
+    Correzioni.correggiFacility({ facility: 'ITCTA 0001' }, 'ITCTA', note).facility, '0001');
+  confronta('facility scritta come solo numero',
+    Correzioni.correggiFacility({ facility: '12' }, 'ITCTA', note).facility, '0012');
+  confronta('numero zero tenuto',
+    Correzioni.correggiFacility({ facility: 'MTMLA-0000' }, 'MTMLA', note).facility, '0000');
   confronta('sporcizia dell\'OCR attorno al codice',
-    Correzioni.correggiFacility({ facility: 'Ske MTMLA-0002' }, 'MTMLA', 'originale', note).facility,
-    'MTMLA-0002');
+    Correzioni.correggiFacility({ facility: 'Ske MTMLA-0002' }, 'MTMLA', note).facility, '0002');
+  confronta('facility con codice di un altro porto: tenuto il numero',
+    Correzioni.correggiFacility({ facility: 'ITAUG-0003' }, 'ITCTA', note).facility, '0003');
+
+  const noteDescrittiva = [];
+  confronta('facility descrittiva: numero da chiedere',
+    Correzioni.correggiFacility({ facility: 'Terminal Rada San Filippo' }, 'ITCTA', noteDescrittiva).facility, '');
+  verifica('facility descrittiva segnalata', noteDescrittiva.length === 1, noteDescrittiva.join(' '));
   confronta('nome con numero non confuso con un codice',
-    Correzioni.correggiFacility({ facility: 'Malta Freeport Terminal 2' }, 'MTMAR', 'originale', note).facility,
-    'Malta Freeport Terminal 2');
+    Correzioni.correggiFacility({ facility: 'Malta Freeport Terminal 2' }, 'MTMAR', note).facility, '');
+}
+
+/* L'elenco UN/LOCODE non e' completo: un codice che non c'e' non va
+   sostituito, a meno che gli altri dati della riga dicano chiaramente altro. */
+function testCodiciFuoriElenco() {
+  console.log('\nCodici non presenti nell\'elenco');
+  const soloCodice = [];
+  const tenuto = Correzioni.correggiPorto(
+    { unlocode: 'GRREU', porto: 'Aegean anchorage', paese: 'Greece', facility: '0002' },
+    database, soloCodice
+  );
+  confronta('codice ignoto tenuto quando non c\'e\' altro', tenuto.unlocode, 'GRREU');
+  verifica('e\' segnalato', soloCodice.join(' ').indexOf('GRREU') >= 0, soloCodice.join(' '));
+
+  const conProve = [];
+  const corretto = Correzioni.correggiPorto(
+    { unlocode: 'MTM1A', porto: 'Valletta', paese: 'Malta', facility: 'MTMLA-0002' },
+    database, conProve
+  );
+  confronta('codice storpiato corretto se porto e facility concordano', corretto.unlocode, 'MTMLA');
+  verifica('la correzione e\' spiegata', conProve.join(' ').indexOf('MTM1A') >= 0, conProve.join(' '));
 }
 
 (async function eseguiTest() {
@@ -282,7 +370,10 @@ function testLivelliEFacility() {
   testDiagnostica();
   testDate();
   testLivelliEFacility();
+  testCodiciFuoriElenco();
+  testConsecutivita();
   await testModuloPulito();
+  await testModuloReale();
   await testModuloConErrori();
   await testOrdineInverso();
   await testRigheParziali();

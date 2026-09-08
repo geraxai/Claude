@@ -9,9 +9,15 @@
  *  - il codice porto viene confrontato con il nome del porto e con il paese:
  *    se due indizi su tre concordano, il terzo viene corretto;
  *  - le date devono essere in ordine (dal piu' recente al piu' vecchio),
- *    la partenza non puo' precedere l'arrivo e nessuna data puo' essere
+ *    la partenza non puo' precedere l'arrivo, gli approdi devono essere
+ *    consecutivi (senza sovrapposizioni) e nessuna data puo' essere
  *    successiva alla data del modulo: l'anno sbagliato viene ricalcolato;
  *  - il livello di sicurezza puo' essere solo 1, 2 o 3.
+ *
+ * Riga prodotta per il PMIS (una per approdo, campi separati da ";"):
+ *    UNLOCODE;gg/mm/aaaa;gg/mm/aaaa;SL1;0000
+ * cioe' codice del porto, data di arrivo, data di partenza, livello di
+ * sicurezza con il prefisso SL e numero della port facility a quattro cifre.
  *
  * Nessuna dipendenza esterna: funziona sia nel browser sia in Node.
  */
@@ -40,18 +46,17 @@
     return (numero < 10 ? '0' : '') + numero;
   }
 
-  function formattaData(data, formato) {
+  /* Nel PMIS le date si scrivono sempre gg/mm/aaaa. */
+  function formattaData(data) {
     if (!data) { return ''; }
-    switch (formato) {
-      case 'gg/mm/aa':
-        return dueCifre(data.g) + '/' + dueCifre(data.m) + '/' + dueCifre(data.a % 100);
-      case 'aaaa-mm-gg':
-        return data.a + '-' + dueCifre(data.m) + '-' + dueCifre(data.g);
-      case 'ggmmaaaa':
-        return dueCifre(data.g) + dueCifre(data.m) + data.a;
-      default:
-        return dueCifre(data.g) + '/' + dueCifre(data.m) + '/' + data.a;
-    }
+    return dueCifre(data.g) + '/' + dueCifre(data.m) + '/' + data.a;
+  }
+
+  /* Il livello di sicurezza va scritto SL1, SL2 o SL3. */
+  function formattaLivello(sl) {
+    var testo = String(sl == null ? '' : sl).trim().toUpperCase();
+    if (!testo) { return ''; }
+    return testo.indexOf('SL') === 0 ? testo : 'SL' + testo;
   }
 
   /* Anni possibili per una cifra dell'anno letta male o incompleta. */
@@ -279,6 +284,11 @@
   var COSTO_VIOLAZIONE = 1000;
   var COSTO_SCAMBIO = 20;
   var COSTO_ORDINE_ROTTO = 300;
+  // due approdi che si accavallano di un giorno sono quasi sempre un errore di
+  // battitura sul giorno: spostare l'anno per rimetterli in fila farebbe un
+  // danno peggiore, quindi la penalita' cresce con i giorni di accavallamento
+  var COSTO_ACCAVALLAMENTO = 25;
+  var COSTO_PER_GIORNO_OLTRE = 3;
 
   function costoCoppia(combinazione, vincoli) {
     var arrivo = combinazione.arrivo;
@@ -294,7 +304,8 @@
 
     var ultima = partenza || arrivo;
     if (ultima && vincoli.tetto != null && ultima.data.ms > vincoli.tetto) {
-      costo += COSTO_VIOLAZIONE + (ultima.data.ms - vincoli.tetto) / GIORNO_MS;
+      costo += COSTO_ACCAVALLAMENTO +
+        ((ultima.data.ms - vincoli.tetto) / GIORNO_MS) * COSTO_PER_GIORNO_OLTRE;
     }
     if (ultima && vincoli.tetto != null) {
       var distanzaGiorni = Math.abs(vincoli.tetto - ultima.data.ms) / GIORNO_MS;
@@ -360,8 +371,7 @@
   /* Peso dei tre indizi disponibili per il codice porto. */
   var PESO = {
     codiceValido: 1,
-    codiceCorretto1: 0.8,
-    codiceCorretto2: 0.45,
+    codiceFuoriElenco: 0.5,
     nomeEsatto: 1,
     nomeSimile: 0.7,
     facility: 0.6
@@ -385,6 +395,7 @@
     var perNome = riga.porto ? database.cercaPerNome(riga.porto, paeseIso) : null;
     var daFacility = locodeDaFacility(riga.facility);
     var indizi = [];
+    var fuoriElenco = null;
 
     if (scritto && database.esiste(scritto)) {
       indizi.push({ codice: scritto, origine: 'codice', peso: PESO.codiceValido });
@@ -392,18 +403,18 @@
         note.push('UN/LOCODE "' + lettoDalPdf + '" letto come ' + scritto + '.');
       }
     } else if (scritto) {
+      // L'elenco UN/LOCODE non contiene proprio tutti i codici in uso, quindi
+      // uno che non risulta non e' per forza sbagliato: il codice del modulo
+      // resta, a meno che il nome del porto o la port facility ne indichino
+      // chiaramente un altro. Il codice somigliante finisce solo nelle note.
       var vicino = database.correggiCodice(scritto, paeseIso);
-      if (vicino && vicino.distanza <= 2) {
-        indizi.push({
-          codice: vicino.codice,
-          origine: 'codice',
-          peso: vicino.distanza === 1 ? PESO.codiceCorretto1 : PESO.codiceCorretto2,
-          dettaglio: 'UN/LOCODE "' + lettoDalPdf + '" non esiste nell\'elenco UN/LOCODE: ' +
-            'corretto in ' + vicino.codice + ' (' + vicino.nome + ').'
-        });
-      } else {
-        note.push('UN/LOCODE "' + lettoDalPdf + '" non esiste nell\'elenco UN/LOCODE.');
-      }
+      fuoriElenco = {
+        codice: scritto,
+        origine: 'codice',
+        peso: PESO.codiceFuoriElenco,
+        vicino: (vicino && vicino.distanza <= 2) ? vicino : null
+      };
+      indizi.push(fuoriElenco);
     }
 
     if (perNome) {
@@ -464,11 +475,25 @@
       note.push(miglioreVoce.dettagli[d]);
     }
 
+    if (fuoriElenco && codiceFinale === fuoriElenco.codice) {
+      note.push('UN/LOCODE "' + lettoDalPdf + '" non risulta nel mio elenco: l\'ho lasciato ' +
+        'com\'e\' sul modulo' +
+        (fuoriElenco.vicino
+          ? '. Se il PDF era poco leggibile potrebbe essere ' + fuoriElenco.vicino.codice +
+            ' (' + fuoriElenco.vicino.nome + '): controlla.'
+          : ': controlla che sia scritto bene.'));
+    } else if (fuoriElenco) {
+      note.push('UN/LOCODE "' + lettoDalPdf + '" non esiste nell\'elenco UN/LOCODE: corretto in ' +
+        codiceFinale + ' (' + (database.nomeDiCodice(codiceFinale) || '?') +
+        '), come dicono gli altri dati della riga.');
+    }
+
     var scartati = [];
     for (var altro in punteggi) {
-      if (Object.prototype.hasOwnProperty.call(punteggi, altro) && altro !== codiceFinale) {
-        scartati.push(altro + ' (' + (database.nomeDiCodice(altro) || 'sconosciuto') + ')');
-      }
+      if (!Object.prototype.hasOwnProperty.call(punteggi, altro)) { continue; }
+      // il codice fuori elenco ha gia' una nota tutta sua
+      if (altro === codiceFinale || (fuoriElenco && altro === fuoriElenco.codice)) { continue; }
+      scartati.push(altro + ' (' + (database.nomeDiCodice(altro) || 'sconosciuto') + ')');
     }
     if (scartati.length) {
       note.push('Sul modulo gli indizi non concordano: scelto ' + codiceFinale + ' (' +
@@ -501,7 +526,7 @@
       porto: database.nomeDiCodice(codiceFinale) || riga.porto,
       paese: isoFinale,
       nomePaese: database.nomeDiPaese(isoFinale) || riga.paese,
-      sicuro: !scartati.length
+      sicuro: !scartati.length && !fuoriElenco
     };
   }
 
@@ -512,7 +537,7 @@
   function correggiLivello(riga, note) {
     var grezzo = String(riga.sl || '').trim();
     if (!grezzo) {
-      note.push('Livello di sicurezza assente nel PDF: impostato 1 (da verificare).');
+      note.push('Livello di sicurezza assente nel PDF: impostato SL1 (da verificare).');
       return { sl: '1', sicuro: false };
     }
     var mappa = { I: '1', l: '1', i: '1', '|': '1', Z: '2', z: '2', S: '5', s: '5', E: '3' };
@@ -520,22 +545,28 @@
     var cifra = /[0-9]/.test(carattere) ? carattere : (mappa[carattere] || '');
     if (cifra === '1' || cifra === '2' || cifra === '3') {
       if (cifra !== carattere) {
-        note.push('Livello di sicurezza "' + grezzo + '" letto come ' + cifra + '.');
+        note.push('Livello di sicurezza "' + grezzo + '" letto come SL' + cifra + '.');
       }
       return { sl: cifra, sicuro: true };
     }
-    note.push('Livello di sicurezza "' + grezzo + '" non valido: impostato 1 (da verificare).');
+    note.push('Livello di sicurezza "' + grezzo + '" non valido: impostato SL1 (da verificare).');
     return { sl: '1', sicuro: false };
   }
 
-  function correggiFacility(riga, unlocode, formato, note) {
+  /*
+   * Nel PMIS la port facility e' il numero GISIS di quattro cifre (0002, 0106).
+   * Sul modulo puo' essere scritta come "ITCTA-0002", "IT CTA 0002", "2" o
+   * come nome del terminal: nell'ultimo caso il numero non c'e' e va chiesto
+   * a chi compila, perche' inventarlo sarebbe peggio che lasciarlo vuoto.
+   */
+  function correggiFacility(riga, unlocode, note) {
     var testo = String(riga.facility || '')
       .replace(/\s{2,}/g, ' ')
       .replace(/^[\s,;:.\-|\u00a6\[\]{}_"']+|[\s,;:.|\u00a6\[\]{}_"']+$/g, '')
       .trim();
 
     if (!testo) {
-      note.push('Port facility assente nel PDF: da inserire a mano.');
+      note.push('Port facility assente nel PDF: scrivi a mano il numero di quattro cifre.');
       return { facility: '', numero: '', sicuro: false };
     }
 
@@ -544,7 +575,7 @@
     var soloNumero = testo.match(/^n?[.\s]*([0-9]{1,4})$/i);
     var numero = '';
     var codicePorto = '';
-    var testoOriginale = testo;
+    var ripulita = false;
 
     if (conCodice) {
       codicePorto = (conCodice[1] + conCodice[2]).toUpperCase();
@@ -562,33 +593,25 @@
       if (dentro) {
         codicePorto = unlocode;
         numero = dentro[1];
-        testo = unlocode + '-' + dentro[1];
+        ripulita = true;
       }
     }
 
-    if (numero) {
-      while (numero.length < 4) { numero = '0' + numero; }
+    if (!numero) {
+      note.push('Nella colonna port facility c\'e\' scritto "' + testo + '": il PMIS vuole il ' +
+        'numero di quattro cifre del GISIS, scrivilo a mano.');
+      return { facility: '', numero: '', sicuro: false };
     }
+
+    while (numero.length < 4) { numero = '0' + numero; }
 
     if (codicePorto && unlocode && codicePorto !== unlocode) {
-      note.push('Il codice della port facility (' + codicePorto +
-        ') non coincide con l\'UN/LOCODE ' + unlocode + ': usato ' + unlocode + '.');
-      codicePorto = unlocode;
+      note.push('Il codice della port facility (' + codicePorto + '-' + numero +
+        ') non coincide con l\'UN/LOCODE ' + unlocode + ': controlla la riga.');
+    } else if (ripulita) {
+      note.push('Port facility "' + testo + '" letta come numero ' + numero + '.');
     }
-
-    var risultato = testo;
-    if (formato === 'codice' && numero) {
-      risultato = (codicePorto || unlocode || '') + '-' + numero;
-    } else if (formato === 'numero' && numero) {
-      risultato = numero;
-    } else if (conCodice) {
-      risultato = (codicePorto || unlocode || '') + '-' + numero;
-    }
-
-    if (risultato !== testoOriginale) {
-      note.push('Port facility "' + testoOriginale + '" scritta come ' + risultato + '.');
-    }
-    return { facility: risultato, numero: numero, sicuro: true };
+    return { facility: numero, numero: numero, sicuro: true };
   }
 
   /* ------------------------------------------------------------------
@@ -596,8 +619,6 @@
      ------------------------------------------------------------------ */
 
   var OPZIONI_PREDEFINITE = {
-    formatoData: 'gg/mm/aaaa',
-    formatoFacility: 'originale',
     ordine: 'pdf'
   };
 
@@ -634,7 +655,7 @@
       var note = [];
       var porto = correggiPorto(grezza, database, note);
       var livello = correggiLivello(grezza, note);
-      var facility = correggiFacility(grezza, porto.unlocode, opz.formatoFacility, note);
+      var facility = correggiFacility(grezza, porto.unlocode, note);
       var date = armonizzate.esiti[indice];
       note = date.note.concat(note);
       return {
@@ -643,8 +664,8 @@
         porto: porto.porto,
         paese: porto.paese,
         nomePaese: porto.nomePaese,
-        arrivo: formattaData(date.arrivo, opz.formatoData),
-        partenza: formattaData(date.partenza, opz.formatoData),
+        arrivo: formattaData(date.arrivo),
+        partenza: formattaData(date.partenza),
         arrivoData: date.arrivo,
         partenzaData: date.partenza,
         sl: livello.sl,
@@ -654,6 +675,8 @@
         testoRiga: grezza.testoRiga
       };
     });
+
+    controllaSequenza(righe, armonizzate.ordineCrescente);
 
     if (opz.ordine === 'recente' || opz.ordine === 'vecchio') {
       righe.sort(function (a, b) {
@@ -671,6 +694,36 @@
       pagina: estratto.pagina,
       diagnostica: estratto.diagnostica
     };
+  }
+
+  /*
+   * Gli approdi raccontano un viaggio, quindi devono incastrarsi: dentro la
+   * riga l'arrivo viene prima della partenza, e la nave non puo' ripartire da
+   * un porto dopo essere gia' arrivata nel successivo. Qui non correggiamo
+   * piu' niente (le date sono gia' state scelte tenendo conto dell'ordine):
+   * segnaliamo solo cio' che non torna, cosi' chi compila lo vede subito.
+   */
+  function controllaSequenza(righe, ordineCrescenteNelPdf) {
+    var indici = [];
+    for (var i = 0; i < righe.length; i++) { indici.push(i); }
+    if (!ordineCrescenteNelPdf) { indici.reverse(); }
+
+    var precedente = null;
+    for (var k = 0; k < indici.length; k++) {
+      var riga = righe[indici[k]];
+      if (!riga.arrivoData || !riga.partenzaData) { continue; }
+
+      if (riga.partenzaData.ms < riga.arrivoData.ms) {
+        riga.note.push('In questa riga la partenza (' + riga.partenza + ') viene prima ' +
+          'dell\'arrivo (' + riga.arrivo + '): controlla le due date.');
+      }
+      if (precedente && riga.arrivoData.ms < precedente.riga.partenzaData.ms) {
+        riga.note.push('Questo approdo si sovrappone all\'approdo n. ' + precedente.numero +
+          ' (' + (precedente.riga.unlocode || 'porto da completare') + ', partenza ' +
+          precedente.riga.partenza + '): gli approdi devono essere consecutivi, controlla.');
+      }
+      precedente = { riga: riga, numero: indici[k] + 1 };
+    }
   }
 
   function annoPiuFrequente(righe, oggi) {
@@ -700,9 +753,15 @@
   }
 
   /* Riga nel formato richiesto dal PMIS:
-     UNLOCODE:arrivo:partenza:livello:port facility */
+     UNLOCODE;arrivo;partenza;SL1;numero della port facility */
   function formattaRiga(riga) {
-    return [riga.unlocode, riga.arrivo, riga.partenza, riga.sl, riga.facility].join(':');
+    return [
+      riga.unlocode,
+      riga.arrivo,
+      riga.partenza,
+      formattaLivello(riga.sl),
+      riga.facility
+    ].join(';');
   }
 
   function formattaTesto(righe) {
@@ -724,6 +783,7 @@
     formattaRiga: formattaRiga,
     formattaTesto: formattaTesto,
     formattaData: formattaData,
+    formattaLivello: formattaLivello,
     dateCandidate: dateCandidate,
     armonizzaDate: armonizzaDate,
     correggiLivello: correggiLivello,

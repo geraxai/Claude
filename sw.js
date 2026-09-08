@@ -5,7 +5,7 @@
  */
 'use strict';
 
-var VERSIONE = 'isps-pmis-1';
+var VERSIONE = 'isps-pmis-2';
 var DEPOSITO = VERSIONE;
 
 /* Quello che serve sempre: viene scaricato alla prima visita. */
