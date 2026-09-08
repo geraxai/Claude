@@ -14,6 +14,9 @@
 <link rel="icon" href="icona.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icona-180.png">
 <link rel="stylesheet" href="css/stile.css">
+<!-- I pezzi grossi partono subito ma non bloccano la pagina: li carica app.js. -->
+<link rel="preload" href="dati/porti.js" as="script">
+<link rel="preload" href="vendor/pdfjs/pdf.min.js" as="script">
 </head>
 <body>
 
@@ -134,8 +137,6 @@
   <p id="pieDati"></p>
 </footer>
 
-<script src="vendor/pdfjs/pdf.min.js"></script>
-<script src="dati/porti.js"></script>
 <script src="js/database-porti.js"></script>
 <script src="js/estrattore.js"></script>
 <script src="js/correzioni.js"></script>

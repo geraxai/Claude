@@ -114,6 +114,40 @@ località portuali) incluso nell'app, quindi funziona anche senza rete.
 
 ---
 
+## Velocità
+
+Con i PDF che contengono testo il lavoro vero dura pochi decimi di secondo: quasi tutta
+l'attesa, la prima volta, è il tempo di scaricare l'app. Perciò i pezzi grossi (pdf.js, il
+suo *worker* e l'elenco dei porti) non vengono aspettati per mostrare la pagina: partono
+insieme e arrivano mentre si sceglie il file. Il risultato, misurato su rete lenta da
+telefono, è che l'app diventa utilizzabile circa tre volte prima.
+
+| | pagina utilizzabile | dieci righe a schermo |
+| --- | --- | --- |
+| rete veloce | 0,1 s | 0,3 s |
+| 4G lenta | 1,4 s | 4,5 s |
+| 3G | 5,0 s | 16,7 s |
+
+Dalla seconda apertura non si scarica più nulla, perché l'app resta in memoria del browser:
+i tempi diventano quelli della riga "rete veloce".
+
+Altre scelte fatte per non far aspettare:
+
+- l'elenco dei porti serve solo alla correzione finale, quindi il PDF viene aperto e letto
+  senza attenderlo;
+- il *worker* di pdf.js viene avviato in anticipo e poi riusato, invece di essere chiesto al
+  primo file scelto;
+- la copia dell'app per l'uso senza rete viene messa da parte solo dopo che è arrivato il
+  necessario, per non rubare banda a chi sta aspettando;
+- con le scansioni il motore di riconoscimento si prepara mentre la prima pagina viene
+  disegnata, e la lettura si ferma appena la tabella è stata trovata.
+
+Sulle scansioni la risoluzione resta 200 DPI: scendere a 150 farebbe risparmiare pochissimo
+tempo (il costo è quasi tutto fisso) e la lettura della tabella crollerebbe da dieci righe
+corrette su dieci a una.
+
+---
+
 ## Com'è fatta
 
 ```
@@ -127,6 +161,7 @@ dati/porti.js              elenco delle località portuali (generato)
 dati/porti-estesi.js       altre località, caricate solo se servono (generato)
 vendor/pdfjs               lettura dei PDF (Mozilla pdf.js)
 vendor/tesseract           riconoscimento del testo delle scansioni (Tesseract.js)
+test/misura_prestazioni.mjs tempi in un browser vero, con la rete rallentata
 sw.js, manifest.webmanifest funzionamento senza rete e icona sulla schermata Home
 Ultimi-10-approdi-ISPS.html  tutta l'app in un unico file (generato)
 extra-python/              vecchie versioni per PC con Python, non più necessarie
@@ -143,6 +178,16 @@ python3 test/genera_pdf_prova.py         # ricrea i PDF di prova (reportlab, pil
 node test/test_estrattore.mjs            # 112 verifiche automatiche
 npm install --no-save tesseract.js@5.1.1 && node test/test_ocr.mjs   # prova OCR
 ```
+
+Per misurare i tempi in un browser vero, con la rete rallentata come su un telefono
+(serve un server locale attivo, per esempio `python3 -m http.server 8080`):
+
+```bash
+npm install --no-save puppeteer-core@23 && node test/misura_prestazioni.mjs
+```
+
+Controlla anche che nessun file dell'app venga scaricato due volte: è il modo tipico in
+cui il caricamento in parallelo si rompe senza dare errori.
 
 ---
 

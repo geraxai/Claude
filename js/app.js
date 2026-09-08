@@ -54,9 +54,73 @@
     inElaborazione: false
   };
 
-  var database = new self.DatabasePortiModulo.DatabasePorti().carica(self.DATI_PORTI);
-  self.CorrezioniIsps.collegaDatabase(database);
-  stato.databasePronto = true;
+  /*
+   * pdf.js e l'elenco dei porti pesano insieme circa 250 kB compressi, e il
+   * "worker" di pdf.js altri 300. Aspettarli prima di mostrare la pagina
+   * significa fissare per qualche secondo una schermata vuota, sul telefono
+   * con la rete dei dati. Partono invece tutti insieme appena la pagina si
+   * apre: l'app e' subito utilizzabile e di solito sono gia' arrivati quando
+   * l'utente ha finito di scegliere il file. Nella versione a file unico sono
+   * gia' dentro la pagina e le promesse si chiudono immediatamente.
+   */
+  var pdfPronto = window.pdfjsLib
+    ? Promise.resolve()
+    : caricaScript(RADICE + 'vendor/pdfjs/pdf.min.js');
+
+  var database = null;
+  var databasePronto = (self.DATI_PORTI
+    ? Promise.resolve()
+    : caricaScript(RADICE + 'dati/porti.js')
+  ).then(function () {
+    database = new self.DatabasePortiModulo.DatabasePorti().carica(self.DATI_PORTI);
+    self.CorrezioniIsps.collegaDatabase(database);
+    stato.databasePronto = true;
+    mostraFonteDati();
+    return database;
+  });
+
+  /*
+   * pdf.js svolge il lavoro in un "worker" a parte, un altro megabyte che
+   * normalmente viene chiesto solo quando si apre il primo PDF. Lo avviamo
+   * invece appena pdf.js e' qui, mentre l'utente sta ancora scegliendo il
+   * file, e poi lo riusiamo: l'attesa se ne va dove non da' fastidio.
+   * Nella versione a file unico il worker e' dentro la pagina (pdfjsWorker) e
+   * non c'e' nulla da preparare.
+   */
+  var workerPdf = null;
+
+  function preparaWorkerPdf() {
+    if (workerPdf || window.pdfjsWorker || !window.pdfjsLib) { return; }
+    if (window.location.protocol === 'file:') { return; }
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = RADICE + 'vendor/pdfjs/pdf.worker.min.js';
+      // va assegnato subito, non quando sara' avviato: se il PDF arriva prima
+      // pdf.js ne creerebbe un secondo, scaricando il file due volte
+      workerPdf = new pdfjsLib.PDFWorker({ name: 'isps-pmis' });
+      workerPdf.promise.catch(function () { workerPdf = null; });
+    } catch (errore) {
+      workerPdf = null; // si fara' come sempre, al momento dell'apertura
+    }
+  }
+
+  pdfPronto.then(preparaWorkerPdf, function () { /* nulla da preparare */ });
+
+  /* Il primo file scelto non deve trovare l'app a meta': si aspetta cio' che
+     manca ancora, quasi sempre nulla, con un messaggio comprensibile se la
+     rete e' caduta a metà. */
+  function attesa(promessa, cosa) {
+    return promessa.catch(function () {
+      throw new Error('Non riesco a caricare ' + cosa + '. Controlla il ' +
+        'collegamento a internet e ricarica la pagina.');
+    });
+  }
+
+  function componentiPronti() {
+    return Promise.all([
+      attesa(pdfPronto, 'il lettore di PDF'),
+      attesa(databasePronto, 'l\'elenco dei porti')
+    ]);
+  }
 
   /* --------------------------------------------------------------- utilita' */
 
@@ -86,12 +150,19 @@
 
   function apriDocumento(datiPdf) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = RADICE + 'vendor/pdfjs/pdf.worker.min.js';
-    return pdfjsLib.getDocument({
+    var opzioni = {
       data: datiPdf,
       isEvalSupported: false,
       useWorkerFetch: false,
       standardFontDataUrl: RADICE + 'vendor/pdfjs/standard_fonts/'
-    }).promise;
+    };
+    if (workerPdf) {
+      opzioni.worker = workerPdf;
+      // per un eventuale secondo PDF ne preparera' uno nuovo, con il file
+      // ormai in memoria del browser
+      workerPdf = null;
+    }
+    return pdfjsLib.getDocument(opzioni).promise;
   }
 
   /* Il PDF ha davvero un livello di testo? Se no si passa all'OCR. */
@@ -229,6 +300,22 @@
      arrivano coricate. */
   function leggiConOcr(documento) {
     stampaStato('Il PDF è una scansione: preparazione del riconoscimento del testo\u2026', 34);
+
+    /* Preparare il motore OCR (13 MB da scaricare e avviare) e disegnare la
+       prima pagina sono lavori indipendenti: avviandoli insieme si aspetta il
+       piu' lento dei due invece della somma. */
+    var primaTela = documento.getPage(1).then(function (pagina) {
+      return disegnaPagina(pagina, 0);
+    });
+    primaTela.catch(function () { /* l'errore ricompare quando la tela serve */ });
+
+    function telaDellaPagina(numero, gradi) {
+      if (numero === 1 && !gradi) { return primaTela; }
+      return documento.getPage(numero).then(function (pagina) {
+        return disegnaPagina(pagina, gradi);
+      });
+    }
+
     return creaLavoratoreOcr().then(function (lavoratore) {
 
       function scansiona(gradi) {
@@ -238,11 +325,9 @@
           if (numero > documento.numPages) { return Promise.resolve(pagine); }
           stampaStato('Riconoscimento del testo: pagina ' + numero + ' di ' + documento.numPages +
             giro + ' (può richiedere qualche minuto)\u2026', 36);
-          return documento.getPage(numero).then(function (pagina) {
-            return disegnaPagina(pagina, gradi);
-          }).then(function (tela) {
+          return telaDellaPagina(numero, gradi).then(function (immagine) {
             var riconoscimento = conScadenza(
-              lavoratore.recognize(tela, {}, { blocks: true }),
+              lavoratore.recognize(immagine, {}, { blocks: true }),
               SCADENZA_PAGINA_OCR,
               'il riconoscimento del testo di questa pagina non è riuscito entro il tempo previsto'
             );
@@ -297,8 +382,11 @@
 
     stampaStato('Apertura del PDF\u2026', 5);
 
-    leggiFile(file)
-      .then(function (dati) { return apriDocumento(new Uint8Array(dati)); })
+    /* Per aprire il PDF basta pdf.js: l'elenco dei porti serve solo alla
+       correzione, in fondo, e nel frattempo finisce di arrivare da se'. Anche
+       la lettura del file dal disco procede in parallelo. */
+    Promise.all([leggiFile(file), attesa(pdfPronto, 'il lettore di PDF')])
+      .then(function (esiti) { return apriDocumento(new Uint8Array(esiti[0])); })
       .then(function (documento) {
         return leggiTestoNativo(documento).then(function (pagine) {
           if (self.EstrattoreIsps.testoUtilizzabile(pagine)) { return pagine; }
@@ -315,9 +403,11 @@
             'più nitida, oppure inserire le righe a mano qui sotto.'
           );
         }
-        mostraRisultati(estratto);
-        stampaStato('Fatto.', 100);
-        window.setTimeout(function () { mostra(elementi.avanzamento, false); }, 1200);
+        return attesa(databasePronto, 'l\'elenco dei porti').then(function () {
+          mostraRisultati(estratto);
+          stampaStato('Fatto.', 100);
+          window.setTimeout(function () { mostra(elementi.avanzamento, false); }, 1200);
+        });
       })
       .catch(function (errore) {
         mostraErrore(errore && errore.message ? errore.message :
@@ -688,6 +778,14 @@
     navigator.serviceWorker.controller.postMessage({ tipo: 'prepara-offline' }, [canale.port2]);
   }
 
+  /* Chiamata due volte, perche' l'elenco dei porti e l'interfaccia possono
+     essere pronti in un ordine qualunque: scrive quando ci sono entrambi. */
+  function mostraFonteDati() {
+    if (!elementi.pieDati || !self.DATI_PORTI) { return; }
+    elementi.pieDati.textContent = 'Elenco porti: ' + (self.DATI_PORTI.fonte || 'UN/LOCODE') +
+      ' \u00b7 aggiornato al ' + (self.DATI_PORTI.generato || '');
+  }
+
   function preparaInterfaccia() {
     [
       'campoFile', 'bottoneScegli', 'zonaFile', 'nomeFile', 'avanzamento', 'testoStato',
@@ -707,13 +805,16 @@
       }
     }
 
-    elementi.pieDati.textContent = 'Elenco porti: ' + (self.DATI_PORTI.fonte || 'UN/LOCODE') +
-      ' \u00b7 aggiornato al ' + (self.DATI_PORTI.generato || '');
-
+    mostraFonteDati();
     collegaEventi();
 
+    /* Registrandosi, il service worker mette da parte tutta l'app (worker di
+       pdf.js compreso, 1 MB) per l'uso senza rete. E' roba che serve dopo:
+       se partisse adesso ruberebbe banda a chi sta aspettando di lavorare. */
     if ('serviceWorker' in navigator && window.location.protocol.indexOf('http') === 0) {
-      navigator.serviceWorker.register('sw.js').catch(function () { /* niente offline */ });
+      componentiPronti().then(function () {
+        navigator.serviceWorker.register('sw.js').catch(function () { /* niente offline */ });
+      }, function () { /* senza componenti non c'e' nulla da conservare */ });
     }
   }
 

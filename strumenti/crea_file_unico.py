@@ -78,6 +78,14 @@ def main() -> int:
     )
     pagina = pagina.replace('<link rel="apple-touch-icon" href="icona-180.png">', "")
 
+    # qui dentro non c'e' nulla da scaricare in anticipo: tutto e' gia' incluso
+    pagina = re.sub(
+        r'\s*<!-- I pezzi grossi[^>]*-->'
+        r'(\s*<link rel="(?:preload|prefetch)" href="[^"]+" as="script">)+',
+        "",
+        pagina,
+    )
+
     # il comando per l'uso senza rete ha senso solo nella versione a cartella
     pagina = re.sub(
         r'\s*<div class="griglia-opzioni" id="zonaOffline">.*?</div>\s*</div>',
@@ -92,7 +100,7 @@ def main() -> int:
         "<!-- js/database-porti.js -->",
         "<script>" + AVVISO_FILE_UNICO + "</script>\n<!-- js/database-porti.js -->",
     )
-    inizio = pagina.index('<script src="vendor/pdfjs/pdf.min.js"></script>')
+    inizio = pagina.index('<script src="js/database-porti.js"></script>')
     fine = pagina.index("</body>")
     pagina = pagina[:inizio] + blocco_script + "\n\n" + pagina[fine:]
 
