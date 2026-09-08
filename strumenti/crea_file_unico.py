@@ -9,8 +9,9 @@ caricato nel thread principale, perche' i browser non permettono di avviare un
 worker da un file aperto con doppio clic (protocollo file://).
 
 Il riconoscimento del testo delle scansioni (Tesseract, 13 MB) non viene
-incluso: se accanto al file c'e' la cartella vendor/ viene usata quella,
-altrimenti l'app lo scarica al momento dalla copia pubblica su internet.
+incluso, sarebbe un file da 15 MB da aprire ogni volta. Aperta con doppio clic
+la pagina lo scarica al momento dalla copia pubblica su internet: le scansioni
+si leggono lo stesso, ma solo con il collegamento attivo.
 
 Uso:
     python3 strumenti/crea_file_unico.py

@@ -2732,10 +2732,15 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'incluso-nel-file';
   function creaLavoratoreOcr(indiceFonte) {
     var indice = indiceFonte || 0;
     if (indice >= FONTI_OCR_UTILI.length) {
-      return Promise.reject(new Error(
-        'Il PDF è una scansione e per leggerla serve il riconoscimento del testo, ' +
-        'che qui non riesco ad avviare. Apri l\'app dal suo indirizzo internet ' +
-        '(la versione a cartella), oppure inserisci le righe a mano qui sotto.'
+      /* Aperta come file locale l'unica fonte possibile e' quella su internet:
+         se non si e' avviata, quasi sempre manca il collegamento. */
+      return Promise.reject(new Error(window.location.protocol === 'file:'
+        ? 'Il PDF è una scansione e per leggerla serve il riconoscimento del testo, ' +
+          'che questo file da solo non contiene: scaricalo collegandoti a internet e ' +
+          'riprova, oppure inserisci le righe a mano qui sotto.'
+        : 'Il PDF è una scansione e per leggerla serve il riconoscimento del testo, ' +
+          'che qui non riesco ad avviare. Riprova ricaricando la pagina, oppure ' +
+          'inserisci le righe a mano qui sotto.'
       ));
     }
     var fonte = FONTI_OCR_UTILI[indice];

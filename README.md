@@ -52,15 +52,17 @@ Il PDF viene elaborato dentro il dispositivo e non viene inviato ad alcun server
 
 Due possibilità, entrambe senza installare programmi.
 
-**A. Dal browser (consigliata: legge anche le scansioni).**
+**A. Dal browser (consigliata).**
 Aprire l'indirizzo dell'app con Edge o Chrome. Con *Impostazioni → Salva e condividi →
 Aggiungi alla barra delle applicazioni* si ottiene un'icona sul desktop. Dopo la prima
-apertura funziona anche senza rete.
+apertura funziona anche senza rete, scansioni comprese.
 
 **B. Un solo file sul PC.**
 Copiare il file **`Ultimi-10-approdi-ISPS.html`** dove si vuole (anche in OneDrive) e
-aprirlo con un doppio clic: contiene già tutto. Nota: aperto così, per limiti dei browser,
-legge i PDF che contengono testo ma **non** le scansioni; per quelle serve la modalità A.
+aprirlo con un doppio clic: contiene già tutto e legge sia i PDF con testo sia le scansioni.
+Unica differenza rispetto alla modalità A: per le scansioni serve il collegamento a internet,
+perché aperto come file locale il browser non gli lascia usare la copia del riconoscimento
+del testo che sta lì accanto e deve scaricarla al momento.
 
 ---
 
