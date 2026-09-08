@@ -52,11 +52,16 @@
     return dueCifre(data.g) + '/' + dueCifre(data.m) + '/' + data.a;
   }
 
-  /* Il livello di sicurezza va scritto SL1, SL2 o SL3. */
+  /*
+   * Il livello di sicurezza nel PMIS si scrive sempre con la sigla davanti al
+   * numero: SL1, SL2 o SL3. Qui si accetta qualunque forma ("2", "SL2",
+   * "sl 2") e si tiene solo la cifra. Il campo non puo' restare vuoto, quindi
+   * se manca o non e' uno dei tre livelli si scrive SL1, che e' il livello
+   * ordinario: la riga viene comunque segnalata da correggiLivello.
+   */
   function formattaLivello(sl) {
-    var testo = String(sl == null ? '' : sl).trim().toUpperCase();
-    if (!testo) { return ''; }
-    return testo.indexOf('SL') === 0 ? testo : 'SL' + testo;
+    var cifra = String(sl == null ? '' : sl).replace(/[^123]/g, '').charAt(0);
+    return 'SL' + (cifra || '1');
   }
 
   /* Anni possibili per una cifra dell'anno letta male o incompleta. */

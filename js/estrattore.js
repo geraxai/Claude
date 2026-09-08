@@ -433,7 +433,9 @@
     for (var i = parole.length - 1; i >= 0; i--) {
       var pulita = soloAlfanumerico(parole[i].testo);
       if (/^[S5][L1I]$/.test(pulita)) { return i; }
-      if (/^[S5][L1I][0-9]$/.test(pulita)) { return i; }
+      // "SL2" tutto attaccato, anche quando l'OCR legge la cifra come lettera
+      // (2 letto Z, 1 letto I): la cifra vera la ricava poi cifraLivello
+      if (/^[S5][L1I][0-9IZS]$/.test(pulita)) { return i; }
       if (/^[S5][L1I]?[=:]/.test(parole[i].testo.toUpperCase())) { return i; }
     }
     return -1;
